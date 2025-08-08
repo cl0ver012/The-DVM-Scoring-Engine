@@ -16,6 +16,11 @@ MIN_LP_TO_MCAP_RATIO = 0.02
 MAX_TOP10_PERCENT = 30.0
 MAX_BUNDLE_BUYS_PERCENT = 40.0
 
+# Client-updated additional checks
+# Default fee thresholds; can be tuned per product guidance
+MIN_FEES_PAID_SOL_DEFAULT = 20.0
+MIN_FEES_PAID_SOL_MIGRATED = 5.0  # client suggests 5–10 SOL for migrated tokens
+
 
 def _calc_lp_to_mcap_ratio(token: TokenData) -> float:
     if token.market_cap_usd <= 0:
@@ -119,6 +124,26 @@ def run_pre_filter(token: TokenData) -> PreFilterResult:
         "top10_pct_lt_30": check_top10,
         "bundle_buys_pct_lt_40": check_bundles,
     }
+
+    # Fees paid SOL: optional field today; if present, enforce threshold.
+    # If token is marked as migrated, use the relaxed threshold.
+    def check_fees_paid(t: TokenData) -> Tuple[bool, Dict[str, float]]:
+        if t.fees_paid_sol is None:
+            return True, {
+                "fees_paid_sol": None,
+                "threshold_applied": None,
+                "note": "missing fees_paid_sol; not blocking",
+            }
+        threshold = (
+            MIN_FEES_PAID_SOL_MIGRATED if t.is_migrated_token else MIN_FEES_PAID_SOL_DEFAULT
+        )
+        return t.fees_paid_sol >= threshold, {
+            "fees_paid_sol": float(t.fees_paid_sol),
+            "min_fees_paid_sol": threshold,
+            "is_migrated_token": bool(t.is_migrated_token),
+        }
+
+    checks["fees_paid_sol_min"] = check_fees_paid
 
     failed = []
     details: Dict[str, object] = {}

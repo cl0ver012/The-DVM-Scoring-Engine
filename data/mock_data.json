@@ -18,6 +18,8 @@
     "market_cap_usd": 350000.0,
     "top_10_holders_percent": 24.7,
     "bundle_buys_percent": 18.0,
+    "fees_paid_sol": 28.5,
+    "is_migrated_token": false,
     "last_updated_iso": "2025-08-08T12:34:56Z"
   },
   {
@@ -39,6 +41,8 @@
     "market_cap_usd": 250000.0,
     "top_10_holders_percent": 65.0,
     "bundle_buys_percent": 55.0,
+    "fees_paid_sol": 2.0,
+    "is_migrated_token": true,
     "last_updated_iso": "2025-08-08T12:34:56Z"
   }
 ]

@@ -42,6 +42,15 @@ class TokenData(BaseModel):
         ge=0, le=100, description="Percentage of bundle buys in last window"
     )
 
+    # Extended signals (client-updated pre-filter v2)
+    fees_paid_sol: Optional[float] = Field(
+        default=None, ge=0, description="Global fees paid in SOL (from Axiom/GMGN/Padre)"
+    )
+    is_migrated_token: bool = Field(
+        default=False,
+        description="True if token is a migrated/ported token (stricter fee thresholds may apply)",
+    )
+
     # Optional metadata
     last_updated_iso: Optional[str] = None
 
