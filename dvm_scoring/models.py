@@ -41,18 +41,30 @@ class TokenData(BaseModel):
     bundle_buys_percent: float = Field(
         ge=0, le=100, description="Percentage of bundle buys in last window"
     )
-
-    # Extended signals (client-updated pre-filter v2)
-    fees_paid_sol: Optional[float] = Field(
-        default=None, ge=0, description="Global fees paid in SOL (from Axiom/GMGN/Padre)"
-    )
-    is_migrated_token: bool = Field(
-        default=False,
-        description="True if token is a migrated/ported token (stricter fee thresholds may apply)",
+    # New priority signal from client feedback
+    fees_paid_sol: float = Field(
+        ge=0, description="Global fees paid in SOL (e.g., on-chain tx fees aggregate)"
     )
 
     # Optional metadata
     last_updated_iso: Optional[str] = None
+    is_migrated_token: Optional[bool] = Field(
+        default=None, description="True if token migrated/renounced from prior version"
+    )
+    # Optional future risk features (placeholders for Week 1 refinement)
+    quality_of_holders_score: Optional[float] = Field(
+        default=None,
+        description="0-1 quality score for holder cohorts (optional input)",
+    )
+    fresh_wallets_percent: Optional[float] = Field(
+        default=None, ge=0, le=100, description="Percent fresh wallets"
+    )
+    wallets_with_bad_reputation_percent: Optional[float] = Field(
+        default=None, ge=0, le=100, description="Percent wallets flagged as risky"
+    )
+    sniper_activity_score: Optional[float] = Field(
+        default=None, ge=0, description="Heuristic score for sniper activity"
+    )
 
 
 class PreFilterResult(BaseModel):

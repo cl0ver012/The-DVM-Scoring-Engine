@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Dict, Tuple
 
 from .models import PreFilterResult, TokenData
+from .config import FEES_MIN_SOL_MIGRATED, FEES_MIN_SOL_NEW, APPLY_FEES_TO_OLD
 
 
 # Constants derived from the requirements document
@@ -15,11 +16,8 @@ MIN_LP_POOL_COUNT = 2  # ">1" strictly greater
 MIN_LP_TO_MCAP_RATIO = 0.02
 MAX_TOP10_PERCENT = 30.0
 MAX_BUNDLE_BUYS_PERCENT = 40.0
-
-# Client-updated additional checks
-# Default fee thresholds; can be tuned per product guidance
-MIN_FEES_PAID_SOL_DEFAULT = 20.0
-MIN_FEES_PAID_SOL_MIGRATED = 5.0  # client suggests 5–10 SOL for migrated tokens
+# New: global fees paid threshold (per client feedback)
+MIN_FEES_PAID_SOL = 20.0
 
 
 def _calc_lp_to_mcap_ratio(token: TokenData) -> float:
@@ -107,6 +105,37 @@ def check_bundles(token: TokenData) -> Tuple[bool, Dict[str, float]]:
     }
 
 
+def check_fees_paid(token: TokenData) -> Tuple[bool, Dict[str, float]]:
+    """Fees-paid logic per client direction.
+
+    - Use field if available from Axiom/Padre/GMGN.
+    - For migrated tokens, threshold may differ (5–10 SOL). Default 5 via env.
+    - For old/legacy tokens lacking historical compute, allow pass unless
+      APPLY_FEES_TO_OLD=true.
+    """
+    # Determine context
+    is_new = token.token_age_minutes < MAX_TOKEN_AGE_MINUTES
+    is_migrated = bool(token.is_migrated_token)
+
+    # Pick threshold
+    threshold = FEES_MIN_SOL_NEW if (is_new and not is_migrated) else FEES_MIN_SOL_MIGRATED
+
+    # If not new and not enforcing for old tokens, consider pass (data gaps)
+    if not is_new and not APPLY_FEES_TO_OLD:
+        return True, {
+            "fees_paid_sol": token.fees_paid_sol,
+            "effective_min_fees_paid_sol_exclusive": threshold,
+            "reason": "legacy_token_skip_fees_check",
+        }
+
+    return token.fees_paid_sol > threshold - 1e-12, {
+        "fees_paid_sol": token.fees_paid_sol,
+        "effective_min_fees_paid_sol_exclusive": threshold,
+        "is_migrated_token": is_migrated,
+        "is_new_token": is_new,
+    }
+
+
 def run_pre_filter(token: TokenData) -> PreFilterResult:
     """Run all required pre-filter checks.
 
@@ -123,27 +152,8 @@ def run_pre_filter(token: TokenData) -> PreFilterResult:
         "lp_mcap_ratio_gt_0_02": check_lp_to_mcap_ratio,
         "top10_pct_lt_30": check_top10,
         "bundle_buys_pct_lt_40": check_bundles,
+        "fees_paid_sol_gt_20": check_fees_paid,
     }
-
-    # Fees paid SOL: optional field today; if present, enforce threshold.
-    # If token is marked as migrated, use the relaxed threshold.
-    def check_fees_paid(t: TokenData) -> Tuple[bool, Dict[str, float]]:
-        if t.fees_paid_sol is None:
-            return True, {
-                "fees_paid_sol": None,
-                "threshold_applied": None,
-                "note": "missing fees_paid_sol; not blocking",
-            }
-        threshold = (
-            MIN_FEES_PAID_SOL_MIGRATED if t.is_migrated_token else MIN_FEES_PAID_SOL_DEFAULT
-        )
-        return t.fees_paid_sol >= threshold, {
-            "fees_paid_sol": float(t.fees_paid_sol),
-            "min_fees_paid_sol": threshold,
-            "is_migrated_token": bool(t.is_migrated_token),
-        }
-
-    checks["fees_paid_sol_min"] = check_fees_paid
 
     failed = []
     details: Dict[str, object] = {}

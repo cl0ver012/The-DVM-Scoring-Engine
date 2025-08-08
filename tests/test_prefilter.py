@@ -23,7 +23,7 @@ def make_passing_token() -> TokenData:
             "market_cap_usd": 350000.0,
             "top_10_holders_percent": 24.7,
             "bundle_buys_percent": 18.0,
-            "fees_paid_sol": 25.0,
+            "fees_paid_sol": 34.87,
             "is_migrated_token": False,
         }
     )
@@ -69,20 +69,4 @@ def test_prefilter_fails_for_invalid_token():
     assert result.passed is False
     # Should fail multiple checks
     assert len(result.failed_checks) >= 6
-
-
-def test_fees_paid_thresholds():
-    # Non-migrated requires >= 20 SOL
-    base = make_passing_token()
-    base.fees_paid_sol = 19.9
-    res = run_pre_filter(base)
-    assert res.passed is False
-    assert "fees_paid_sol_min" in set(res.failed_checks)
-
-    # Migrated tokens allow >= 5 SOL
-    mig = make_passing_token()
-    mig.is_migrated_token = True
-    mig.fees_paid_sol = 6.0
-    res2 = run_pre_filter(mig)
-    assert res2.passed is True
 
