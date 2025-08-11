@@ -8,8 +8,8 @@ WORKDIR /app
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY dvm_scoring /app/dvm_scoring
+COPY app /app/app
 COPY data /app/data
 
-CMD ["python", "-m", "dvm_scoring.main", "data/mock_data.json"]
+CMD ["python", "-m", "app.main", "data/mock_data.json"]
 

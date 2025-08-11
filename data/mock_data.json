@@ -13,37 +13,26 @@
     "liquidity_locked_percent": 100.0,
     "volume_5m_usd": 7250.0,
     "holders_count": 358,
-    "lp_pool_count": 2,
-    "liquidity_usd": 12000.0,
-    "market_cap_usd": 350000.0,
     "top_10_holders_percent": 24.7,
-    "bundle_buys_percent": 18.0,
-    "fees_paid_sol": 34.87,
-    "is_migrated_token": false,
-    "last_updated_iso": "2025-08-08T12:34:56Z"
+    "fees_paid_sol": 34.87
   },
   {
     "token_address": "Bad1111111111111111111111111111111111111111",
     "token_symbol": "BAD",
     "token_name": "Bad Example Token",
-    "token_age_minutes": 125,
+    "token_age_minutes": 70,
     "degen_audit": {
-      "is_honeypot": true,
-      "has_blacklist": true,
-      "buy_tax_percent": 5.0,
-      "sell_tax_percent": 6.0
+      "is_honeypot": false,
+      "has_blacklist": false,
+      "buy_tax_percent": 1.0,
+      "sell_tax_percent": 1.0
     },
-    "liquidity_locked_percent": 50.0,
-    "volume_5m_usd": 1200.0,
-    "holders_count": 50,
-    "lp_pool_count": 1,
-    "liquidity_usd": 1000.0,
-    "market_cap_usd": 250000.0,
-    "top_10_holders_percent": 65.0,
-    "bundle_buys_percent": 55.0,
-    "fees_paid_sol": 2.0,
-    "is_migrated_token": true,
-    "last_updated_iso": "2025-08-08T12:34:56Z"
+    "liquidity_locked_percent": 100.0,
+    "volume_5m_usd": 7000.0,
+    "holders_count": 200,
+    "top_10_holders_percent": 20.0,
+    "fees_paid_sol": 8.0,
+    "token_age_days": 200
   }
 ]
 
