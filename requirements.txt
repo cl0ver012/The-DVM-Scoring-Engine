@@ -1,2 +1,6 @@
 pydantic>=2.7.0,<3
 pytest>=8.2.0,<9
+openai>=1.40.0,<2
+python-dotenv>=1.0.1,<2
+fastapi>=0.111.0,<1
+uvicorn>=0.30.0,<1
