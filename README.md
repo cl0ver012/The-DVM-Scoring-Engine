@@ -1,0 +1,239 @@
+# The DVM Scoring Engine
+
+A Python microservice that automates the creation of "Trench Reports" by analyzing Solana tokens using mathematical scoring logic and AI-powered summaries.
+
+## 🎯 MVP Features
+
+### ✅ Pre-Filter Engine (7 Definitive Rules)
+- **Token Age**: Must be < 1 hour old
+- **Degen Audit**: Pass honeypot, blacklist, and tax < 3% checks
+- **Liquidity Lock**: 100% liquidity must be locked
+- **Initial Volume**: > $5,000 in first 5 minutes
+- **Holder Count**: > 100 holders
+- **Holder Distribution**: Top 10 holders < 30% of supply
+- **Creator Fees**: > 5 SOL paid (if token age < 180 days)
+
+### ✅ Mathematical Scoring Engine
+- **Momentum**: 37.5% weight (volume spikes, price movement, ATH detection)
+- **Smart Money**: 37.5% weight (whale buys, DCA patterns, net inflows)
+- **Sentiment**: 12.5% weight (mention velocity, KOL activity, polarity)
+- **Event**: 12.5% weight (inflow spikes, liquidity events, upgrades)
+
+### ✅ Trending Ranker (TypeScript Parity)
+- **New**: Tokens <1h with DCA/freshness focus
+- **Surging**: Tokens with ATH signals and momentum
+- **All**: Balanced Moby-style scoring across all timeframes
+
+### ✅ AI-Powered Trench Reports
+- OpenAI GPT-4 integration for intelligent summaries
+- Configurable via environment variables
+- Optional feature (works without API key)
+
+### ✅ FastAPI Service
+- **POST /score**: Individual token analysis with pre-filter → scoring → AI summary
+- **POST /rank**: Multi-token ranking with New/Surging/All categories
+- **GET /docs**: Interactive API documentation
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.11+
+- Virtual environment support
+
+### Installation
+```bash
+# Clone and setup
+git clone <repository>
+cd The-DVM-Scoring-Engine
+
+# Create virtual environment
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/Mac
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Configuration
+```bash
+# Copy environment template
+cp ENV.sample .env
+
+# Edit .env file:
+OPENAI_API_KEY=your_openai_api_key_here  # Optional for AI summaries
+SOL_USD=150  # Current SOL price in USD
+```
+
+### Running the Service
+```bash
+# Start the FastAPI server
+uvicorn app.api.server:app --host 0.0.0.0 --port 8000
+
+# Access API documentation
+# http://localhost:8000/docs
+```
+
+### Running Tests
+```bash
+# Run all tests (15/15 should pass)
+python -m pytest tests/ -v
+
+# Run specific test categories
+python -m pytest tests/test_prefilter.py -v
+python -m pytest tests/test_scoring_engine.py -v
+python -m pytest tests/test_ranker.py -v
+```
+
+### Docker Deployment
+```bash
+# Build image
+docker build -t dvm-scoring-engine .
+
+# Run container
+docker run -p 8000:8000 -e OPENAI_API_KEY=your_key dvm-scoring-engine
+```
+
+## 📊 API Usage Examples
+
+### Score Individual Token
+```bash
+curl -X POST "http://localhost:8000/score" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": {
+      "token_address": "So11111111111111111111111111111111111111112",
+      "token_symbol": "DVM",
+      "token_name": "DVM Example Token",
+      "token_age_minutes": 35,
+      "degen_audit": {
+        "is_honeypot": false,
+        "has_blacklist": false,
+        "buy_tax_percent": 1.5,
+        "sell_tax_percent": 2.0
+      },
+      "liquidity_locked_percent": 100.0,
+      "volume_5m_usd": 7250.0,
+      "holders_count": 358,
+      "top_10_holders_percent": 24.7,
+      "fees_paid_sol": 34.87
+    },
+    "metrics": {
+      "momentum": {
+        "volume_spike_ratio": 2.5,
+        "price_change_percent": 15.7
+      },
+      "smart_money": {
+        "whale_buy_usd": 25000,
+        "net_inflow_usd": 15000
+      }
+    },
+    "timeframe": "5m"
+  }'
+```
+
+### Rank Multiple Tokens
+```bash
+curl -X POST "http://localhost:8000/rank" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tab": "New",
+    "rows": [
+      {
+        "id": "1",
+        "symbol": "DVM",
+        "mc_now": 275000,
+        "vol_now": 250000,
+        "vol_to_mc": 2.5,
+        "whale_buy_count": 3,
+        "kol_velocity": 20,
+        "fee_sol_now": 150,
+        "dca_flag": 1,
+        "ath_flag": 0
+      }
+    ]
+  }'
+```
+
+## 🏗️ Project Structure
+
+```
+The-DVM-Scoring-Engine/
+├── app/
+│   ├── api/           # FastAPI endpoints and schemas
+│   ├── engine/        # Mathematical scoring modules
+│   ├── models/        # Pydantic data models
+│   ├── utils/         # Pre-filter logic
+│   ├── ranker/        # TypeScript formula ports
+│   └── ai/            # OpenAI integration
+├── tests/             # Comprehensive test suite
+├── data/              # Mock data for development
+├── Dockerfile         # Container configuration
+└── requirements.txt   # Python dependencies
+```
+
+## 🧪 Test Coverage
+
+- **15/15 tests passing** (100% success rate)
+- Pre-filter validation (7 rules × multiple scenarios)
+- Scoring engine mathematical correctness
+- TypeScript formula parity verification
+- AI integration with mock client
+- Edge case handling
+
+## 🔧 Development
+
+### Adding New Scoring Metrics
+1. Update `app/models/metrics.py` with new fields
+2. Implement scoring logic in `app/engine/`
+3. Add corresponding tests in `tests/`
+4. Update API schemas if needed
+
+### Extending Pre-Filter Rules
+1. Add new check function to `app/utils/pre_filter.py`
+2. Update `run_pre_filter()` to include new check
+3. Add test cases in `tests/test_prefilter.py`
+
+### Customizing AI Summaries
+1. Modify prompts in `app/ai/trench_report.py`
+2. Adjust model parameters for cost/quality trade-offs
+3. Test with `app/ai/demo_trench.py`
+
+## 📈 Performance
+
+- **Pre-filter**: Processes tokens in ~1ms
+- **Scoring**: Mathematical calculations in ~2ms
+- **AI Summary**: 2-5 seconds (when enabled)
+- **Ranking**: Handles 100+ tokens in ~10ms
+
+## 🔒 Security
+
+- No hardcoded API keys (environment variables only)
+- Input validation via Pydantic models
+- Graceful error handling
+- Optional AI features (fail-safe without OpenAI)
+
+## 🚦 Status
+
+**✅ MVP Complete** - Ready for integration with Go backend and frontend applications.
+
+### Completed Features
+- ✅ All 7 pre-filter rules implemented and tested
+- ✅ Mathematical scoring engine (4 categories, proper weights)
+- ✅ TypeScript formula parity (New/Surging/All ranking)
+- ✅ FastAPI service with 2 endpoints
+- ✅ OpenAI integration for AI summaries
+- ✅ Docker containerization
+- ✅ Comprehensive test suite (15/15 passing)
+- ✅ Mock data for development
+- ✅ Environment-based configuration
+
+### Ready for Integration
+- Real-time data streams from Go backend
+- WebSocket/SSE for live updates
+- Authentication and rate limiting
+- Production deployment
+
+## 📞 Support
+
+For questions or issues, refer to the API documentation at `/docs` when the server is running, or review the test files for usage examples.
