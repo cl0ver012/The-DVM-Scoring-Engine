@@ -42,7 +42,7 @@ def _build_user_prompt(data: TrenchInput) -> str:
         "   - Risks (max 4 bullets).\n"
         "   - What to watch next (max 3 bullets).\n"
         "3) Keep total under ~200–250 words. Use USD abbreviations (K/M) and percentages with 1–2 decimals.\n"
-        "Return both: Markdown section first, then a JSON block reflecting the same content."
+        "Return ONLY clean markdown format. Do NOT include any JSON blocks or code blocks."
     )
 
 
