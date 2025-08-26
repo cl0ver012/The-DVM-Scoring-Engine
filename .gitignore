@@ -1,20 +1,106 @@
+# Python
 __pycache__/
-.pytest_cache/
-*.pyc
-*.pyo
-*.pyd
-.DS_Store
-.env
-.venv/
-venv/
-dist/
+*.py[cod]
+*$py.class
+*.so
+.Python
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
 coverage.xml
 htmlcov/
-/.coverage*
-/.mypy_cache/
-/.ruff_cache/
-/.vscode/
-/.idea/
+.tox/
+.nox/
+*.cover
+*.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node.js / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+lerna-debug.log*
+.next/
+out/
+.nuxt/
+dist/
+
+# Frontend build files
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Environment files
+.env
+.env.local
+.env.production.local
+.env.development.local
+.env.test.local
+
+# Misc
+*.log
+*.tmp
+*.temp
+.cache/
+
+# Project specific
+test_*.json
+demo_*.json
+integration_test_*.json
+*.md.backup
+*_old.*
+
+# Documentation (temporary)
+DEMO_*.md
+UI_*.md
+INTEGRATION_*.md
+PREFILTER_*.md
+INVESTOR_*.md
+*_GUIDE.md
+*_SUMMARY.md
+*_FIX.md
+*_REPORT.md

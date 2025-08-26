@@ -20,12 +20,22 @@ class ScoreBreakdown:
 
 
 class ScoringEngine:
-    def score(self, metrics: ScoreMetrics) -> ScoreBreakdown:
-        ms = score_momentum(metrics.momentum, metrics.timeframe)
-        sm = score_smart_money(metrics.smart_money, metrics.timeframe)
-        se = score_sentiment(metrics.sentiment, metrics.timeframe)
-        ev = score_event(metrics.event, metrics.timeframe)
+    def score(self, metrics: ScoreMetrics, timeframe: str = "1h") -> ScoreBreakdown:
+        """Score for a specific timeframe - used internally"""
+        ms = score_momentum(metrics.momentum, timeframe)
+        sm = score_smart_money(metrics.smart_money, timeframe)
+        se = score_sentiment(metrics.sentiment, timeframe)
+        ev = score_event(metrics.event, timeframe)
         total = ms + sm + se + ev
         return ScoreBreakdown(momentum=ms, smart_money=sm, sentiment=se, event=ev, total=total)
+    
+    def score_all_timeframes(self, metrics: ScoreMetrics) -> dict:
+        """Calculate scores for all timeframes as client requested for NEW category"""
+        timeframes = ["5m", "15m", "30m", "1h"]
+        scores = {}
+        for tf in timeframes:
+            breakdown = self.score(metrics, tf)
+            scores[tf] = breakdown.total
+        return scores
 
 

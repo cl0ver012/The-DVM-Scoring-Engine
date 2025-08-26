@@ -13,8 +13,10 @@
     "liquidity_locked_percent": 100.0,
     "volume_5m_usd": 7250.0,
     "holders_count": 358,
+    "lp_count": 3,
+    "lp_mcap_ratio": 0.045,
     "top_10_holders_percent": 24.7,
-    "fees_paid_sol": 34.87
+    "bundle_percent": 15.2
   },
   {
     "token_address": "Bad1111111111111111111111111111111111111111",
@@ -30,9 +32,9 @@
     "liquidity_locked_percent": 100.0,
     "volume_5m_usd": 7000.0,
     "holders_count": 200,
+    "lp_count": 1,
+    "lp_mcap_ratio": 0.015,
     "top_10_holders_percent": 20.0,
-    "fees_paid_sol": 8.0,
-    "token_age_days": 200
+    "bundle_percent": null
   }
 ]
-

@@ -6,9 +6,8 @@ from pydantic import BaseModel, Field
 
 
 class ScoreRequest(BaseModel):
-    timeframe: Literal["5m", "15m", "30m", "1h"] = "5m"
-    token: dict
-    metrics: dict
+    token: dict  # TokenData fields
+    metrics: dict = {}  # Optional ScoreMetrics fields, defaults to empty
 
 
 class ScoreResponse(BaseModel):
@@ -16,44 +15,50 @@ class ScoreResponse(BaseModel):
     failed_checks: List[str]
     breakdown: dict
     total: float
+    momentum: float
+    smart_money: float
+    sentiment: float
+    event: float
+    # Multi-timeframe scores for NEW category (as client requested)
+    new_scores: Optional[dict] = None  # {"5m": 0.85, "15m": 0.72, "30m": 0.68, "1h": 0.63}
     trench_report_markdown: Optional[str] = None
     trench_report_json: Optional[dict] = None
 
 
 class RankRow(BaseModel):
-    # Subset needed for ranking and UI
+    # Essential fields for ranking (simplified from 25+ fields to core metrics)
     id: str
     symbol: str
     name: str
     price_now: float
-    price_change_pct: float
-    mc_now: float
-    mc_change_pct: float
-    vol_now: float
-    vol_change_pct: float
-    vol_to_mc: float
-    lp_now: float
-    lp_change_pct: float
-    lp_count: int
-    holders_now: int
-    holders_change_pct: float
-    holders_per_mc: float
-    netflow_now: float
-    netflow_change_pct: float
-    whale_buy_count: int
-    kolusd_now: float
-    kolusd_change_pct: float
-    kol_velocity: float
-    tx_now: int
-    tx_change_pct: float
-    netbuy_usd_now: float
-    fee_sol_now: float
-    fee_to_mc_pct: float
-    minutes_since_peak: float
-    top10_pct: float
-    bundle_pct: float
-    dca_flag: int
-    ath_flag: int
+    price_change_pct: float = 0.0
+    mc_now: float = 0.0
+    mc_change_pct: float = 0.0
+    vol_now: float = 0.0
+    vol_change_pct: float = 0.0
+    vol_to_mc: float = 0.0
+    lp_now: float = 0.0
+    lp_change_pct: float = 0.0
+    lp_count: int = 1
+    holders_now: int = 0
+    holders_change_pct: float = 0.0
+    holders_per_mc: float = 0.0
+    netflow_now: float = 0.0
+    netflow_change_pct: float = 0.0
+    whale_buy_count: int = 0
+    kolusd_now: float = 0.0
+    kolusd_change_pct: float = 0.0
+    kol_velocity: float = 0.0
+    tx_now: int = 0
+    tx_change_pct: float = 0.0
+    netbuy_usd_now: float = 0.0
+    fee_sol_now: float = 0.0
+    fee_to_mc_pct: float = 0.0
+    minutes_since_peak: float = 0.0
+    top10_pct: float = 0.0
+    bundle_pct: float = 0.0
+    dca_flag: int = 0
+    ath_flag: int = 0
 
 
 class RankResponse(BaseModel):

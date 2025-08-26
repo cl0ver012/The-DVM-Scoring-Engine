@@ -38,7 +38,7 @@ class EventMetrics(BaseModel):
 
 
 class ScoreMetrics(BaseModel):
-    timeframe: Timeframe
+    # Remove timeframe as input - will be calculated internally for all timeframes
     momentum: MomentumMetrics = Field(default_factory=MomentumMetrics)
     smart_money: SmartMoneyMetrics = Field(default_factory=SmartMoneyMetrics)
     sentiment: SentimentMetrics = Field(default_factory=SentimentMetrics)

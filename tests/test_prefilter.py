@@ -18,8 +18,10 @@ def make_passing_token() -> TokenData:
             "liquidity_locked_percent": 100.0,
             "volume_5m_usd": 7250.0,
             "holders_count": 358,
+            "lp_count": 3,
+            "lp_mcap_ratio": 0.045,
             "top_10_holders_percent": 24.7,
-            "fees_paid_sol": 34.87,
+            "bundle_percent": 20.0,
         }
     )
 
@@ -40,9 +42,10 @@ def make_failing_token() -> TokenData:
             "liquidity_locked_percent": 100.0,
             "volume_5m_usd": 7000.0,
             "holders_count": 200,
+            "lp_count": 1,
+            "lp_mcap_ratio": 0.015,
             "top_10_holders_percent": 20.0,
-            "fees_paid_sol": 8.0,
-            "token_age_days": 200,
+            "bundle_percent": None,
         }
     )
 
@@ -58,8 +61,10 @@ def test_prefilter_fails_for_invalid_token():
     token = make_failing_token()
     result = run_pre_filter(token)
     assert result.passed is False
-    # Should fail due to age < 1h (age_lt_1h)
+    # Should fail due to age, lp_count, and lp_mcap_ratio
     assert "age_lt_1h" in result.failed_checks
+    assert "lp_count_gt_1" in result.failed_checks
+    assert "lp_mcap_ratio_gt_002" in result.failed_checks
 
 
 def base_token(overrides: dict) -> TokenData:
@@ -77,9 +82,10 @@ def base_token(overrides: dict) -> TokenData:
         "liquidity_locked_percent": 100.0,
         "volume_5m_usd": 6000.0,
         "holders_count": 150,
+        "lp_count": 2,
+        "lp_mcap_ratio": 0.03,
         "top_10_holders_percent": 20.0,
-        "fees_paid_sol": 10.0,
-        "token_age_days": 1,
+        "bundle_percent": 30.0,
     }
     base.update(overrides)
     return TokenData.model_validate(base)
@@ -134,15 +140,30 @@ def test_fail_top10_pct_lt_30():
     assert "top10_pct_lt_30" in result.failed_checks
 
 
-def test_fail_fees_paid_when_age_lt_180d():
-    token = base_token({"fees_paid_sol": 5.0, "token_age_days": 10})
+def test_fail_lp_count():
+    token = base_token({"lp_count": 1})
     result = run_pre_filter(token)
     assert result.passed is False
-    assert "fees_paid_sol_gt_5_age_lt_180d" in result.failed_checks
+    assert "lp_count_gt_1" in result.failed_checks
 
 
-def test_skip_fees_when_age_ge_180d():
-    token = base_token({"fees_paid_sol": 0.0, "token_age_days": 181})
+def test_fail_lp_mcap_ratio():
+    token = base_token({"lp_mcap_ratio": 0.01})
+    result = run_pre_filter(token)
+    assert result.passed is False
+    assert "lp_mcap_ratio_gt_002" in result.failed_checks
+
+
+def test_fail_bundle_percent():
+    token = base_token({"bundle_percent": 50.0})
+    result = run_pre_filter(token)
+    assert result.passed is False
+    assert "bundle_pct_lt_40" in result.failed_checks
+
+
+def test_bundle_percent_optional():
+    # Test that bundle_percent is optional (None skips the check)
+    token = base_token({"bundle_percent": None})
     result = run_pre_filter(token)
     assert result.passed is True
-
+    assert result.details["bundle_pct_lt_40"]["skipped"] is True

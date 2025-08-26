@@ -13,7 +13,7 @@ def test_trench_report_builds_and_calls_client():
         timeframe="5m",
         as_of_utc="2025-08-08T12:34:56Z",
     )
-    out = generate_trench_report(mock, data)
+    out = generate_trench_report(data, mock)
     assert out.startswith("# Report")
 
 
