@@ -139,7 +139,4 @@ This token is {rating_desc}. """
         report += "The low scores suggest minimal market interest and potential downside risk. "
         report += "Wait for significant improvements in metrics before considering entry."
     
-    # Add note about demo mode if using mock
-    report += "\n\n*Note: This is a demo report. For real-time AI analysis, configure your OpenAI API key in the .env file.*"
-    
     return report

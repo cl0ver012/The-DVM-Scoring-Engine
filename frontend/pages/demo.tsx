@@ -190,10 +190,13 @@ export default function Demo() {
       {/* Header */}
       <div className="bg-white border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-6 py-6 flex justify-center items-center relative">
-          <h1 className="text-xl font-normal text-gray-900">Demo</h1>
-          <Link href="/" className="absolute right-6 text-sm text-blue-600 hover:text-blue-700">
-            Back to Home
+          <Link href="/" className="absolute left-6 text-sm text-gray-600 hover:text-gray-700">
+            ← Back
           </Link>
+          <div className="text-center">
+            <h1 className="text-xl font-normal text-gray-900">Demo</h1>
+            <p className="text-sm text-gray-500 mt-1">Pre-configured examples for testing</p>
+          </div>
         </div>
       </div>
 

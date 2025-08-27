@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import axios from 'axios'
 import { toast, Toaster } from 'react-hot-toast'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
@@ -8,8 +7,7 @@ import PreFilterResults from '../components/PreFilterResults'
 import ScoreGauge from '../components/ScoreGauge'
 import LoadingAnimation from '../components/LoadingAnimation'
 import TrenchReport from '../components/TrenchReport'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+import { api } from '../lib/api-client'
 
 export default function ScorePage() {
   const [tokenAddress, setTokenAddress] = useState('')
@@ -30,14 +28,8 @@ export default function ScorePage() {
     try {
       // First extract data
       toast.loading('Extracting token data...', { id: 'extract' })
-      const extractRes = await axios.post(`${API_URL}/extract`, {
-        token_address: tokenAddress
-      }, {
-        timeout: 30000, // 30 second timeout
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
+      const extractData = await api.extract(tokenAddress)
+      const extractRes = { data: extractData }
       
       // Check if extraction was successful
       if (!extractRes.data.success || !extractRes.data.data) {
@@ -97,15 +89,8 @@ export default function ScorePage() {
 
       // Then score the token
       toast.loading('Analyzing token...', { id: 'score' })
-      const scoreRes = await axios.post(`${API_URL}/score`, {
-        token: tokenData,
-        metrics: metrics
-      }, {
-        timeout: 30000,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
+      const scoreData = await api.score(tokenData, metrics)
+      const scoreRes = { data: scoreData }
       setScoreData(scoreRes.data)
       toast.success('Analysis complete!', { id: 'score' })
 
@@ -132,30 +117,13 @@ export default function ScorePage() {
       
       {/* Header */}
       <div className="bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/">
-              <button className="flex items-center space-x-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">
-                <ArrowLeftIcon className="w-4 h-4" />
-                <span>Back</span>
-              </button>
-            </Link>
-            <div className="text-center flex-1">
-              <h1 className="text-xl font-normal text-gray-900">DVM Token Analyzer</h1>
-              <p className="text-sm text-gray-500 mt-1">Professional token analysis and scoring</p>
-            </div>
-            <div className="flex items-center space-x-6">
-              <Link href="/rank">
-                <button className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
-                  Rank Multiple Tokens
-                </button>
-              </Link>
-              <Link href="http://localhost:8000/docs" target="_blank">
-                <button className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
-                  API
-                </button>
-              </Link>
-            </div>
+        <div className="max-w-7xl mx-auto px-6 py-6 flex justify-center items-center relative">
+          <Link href="/" className="absolute left-6 text-sm text-gray-600 hover:text-gray-700">
+            ← Back
+          </Link>
+          <div className="text-center">
+            <h1 className="text-xl font-normal text-gray-900">DVM Token Analyzer</h1>
+            <p className="text-sm text-gray-500 mt-1">Professional token analysis and scoring</p>
           </div>
         </div>
       </div>

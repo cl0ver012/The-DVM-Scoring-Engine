@@ -19,7 +19,7 @@ A sophisticated token analysis system that extracts data from multiple sources, 
    - **BIRDEYE_API_KEY**: Already provided in ENV.sample
    - **HELIUS_API_KEY**: Already provided in ENV.sample
 
-   Without the OpenAI API key, you'll see a demo report instead of real AI analysis.
+   Without the OpenAI API key, the system uses dynamic reports based on actual token data.
 - Chrome browser (for GMGN scraping)
 
 ### Backend Setup
@@ -45,11 +45,25 @@ python -m uvicorn app.api.server:app --reload --port 8000
 ### Frontend Setup
 ```bash
 cd frontend
+
+# Install dependencies
 npm install
+
+# Configure environment (for production deployments)
+cp env.example .env.local
+# Edit .env.local with your API URL
+
+# Run development server
 npm run dev
+
+# For production build
+npm run build
+npm start
 ```
 
 Access the application at http://localhost:3000
+
+**Note**: The frontend uses environment-based configuration. See `frontend/CONFIG.md` for detailed setup instructions.
 
 ## 📊 Data Sources
 
@@ -96,8 +110,10 @@ Access the application at http://localhost:3000
 
 ### 4. **AI Reports** (`/report`)
 - Natural language investment analysis
-- Powered by GPT-4
-- Comprehensive token evaluation
+- Two modes:
+  - Dynamic reports based on token scores (no API key needed)
+  - GPT-4 powered analysis (requires OpenAI API key)
+- Comprehensive token evaluation with risk assessment
 
 ## 🏗️ Architecture
 

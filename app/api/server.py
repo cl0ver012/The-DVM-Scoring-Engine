@@ -62,12 +62,13 @@ app.add_middleware(
 
 # Initialize components
 scoring_engine = ScoringEngine()
-# Initialize chat client - always use mock for demo
-# To use real OpenAI, ensure you have a valid API key in .env
+# Initialize chat client
+# Demo mode: Uses dynamic reports based on actual token data
+# OpenAI mode: Uses GPT-4 for even more sophisticated analysis
 use_mock = True  # Set to False when you have a valid OpenAI API key
 
 if use_mock:
-    print("ℹ️ Using demo AI reports (set use_mock=False in server.py to use OpenAI)")
+    print("ℹ️ Using dynamic AI reports based on token data (set use_mock=False for GPT-4 analysis)")
 else:
     try:
         # Check if API key is actually set and not empty

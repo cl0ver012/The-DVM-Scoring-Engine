@@ -1,11 +1,9 @@
 import { useState } from 'react'
-import axios from 'axios'
 import { toast, Toaster } from 'react-hot-toast'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { ArrowLeftIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+import { api } from '../lib/api-client'
 
 export default function RankPage() {
   const [tokens, setTokens] = useState<string[]>([''])
@@ -77,10 +75,8 @@ export default function RankPage() {
         ath_flag: 0,
       }))
 
-      const res = await axios.post(`${API_URL}/rank`, {
-        tab: category,
-        rows
-      })
+      const data = await api.rank(rows, category)
+      const res = { data }
       
       setRankingData(res.data)
       toast.success('Ranking complete!', { id: 'rank' })
@@ -99,29 +95,14 @@ export default function RankPage() {
       <Toaster position="top-right" />
       
       {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link href="/">
-                <button className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors">
-                  <ArrowLeftIcon className="w-5 h-5" />
-                  <span>Back</span>
-                </button>
-              </Link>
-              <div className="border-l border-gray-300 h-6 mx-2"></div>
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Token Ranking</h1>
-                <p className="text-sm text-gray-600 mt-1">Compare and rank multiple tokens</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Link href="/score">
-                <button className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">
-                  Single Token Analysis
-                </button>
-              </Link>
-            </div>
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6 py-6 flex justify-center items-center relative">
+          <Link href="/" className="absolute left-6 text-sm text-gray-600 hover:text-gray-700">
+            ← Back
+          </Link>
+          <div className="text-center">
+            <h1 className="text-xl font-normal text-gray-900">Token Ranking</h1>
+            <p className="text-sm text-gray-500 mt-1">Compare and rank multiple tokens</p>
           </div>
         </div>
       </div>
