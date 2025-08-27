@@ -32,47 +32,95 @@ export default function ScorePage() {
       toast.loading('Extracting token data...', { id: 'extract' })
       const extractRes = await axios.post(`${API_URL}/extract`, {
         token_address: tokenAddress
+      }, {
+        timeout: 30000, // 30 second timeout
+        headers: {
+          'Content-Type': 'application/json'
+        }
       })
-      setExtractedData(extractRes.data)
+      
+      // Check if extraction was successful
+      if (!extractRes.data.success || !extractRes.data.data) {
+        toast.error('Failed to extract token data', { id: 'extract' })
+        return
+      }
+      
+      setExtractedData(extractRes.data.data)
       
       // Check if we have enough data
-      if (extractRes.data.coverage.percentage < 10) {
+      if (extractRes.data.data.coverage?.percentage < 10) {
         toast.warning('Limited data available. Running in demo mode with defaults.', { id: 'extract' })
       }
       
-      toast.success(`Extracted ${extractRes.data.coverage.percentage}% of data`, { id: 'extract' })
+      toast.success(`Extracted ${extractRes.data.data.coverage?.percentage || 0}% of data`, { id: 'extract' })
 
       // Prepare token data for scoring
+      const combinedData = extractRes.data.data.combined_data || extractRes.data.data.pre_filter_data || {}
       const tokenData = {
         token_address: tokenAddress,
-        token_symbol: extractRes.data.combined_data.token_symbol || 'UNKNOWN',
-        token_name: extractRes.data.combined_data.token_name || 'Unknown Token',
-        token_age_minutes: extractRes.data.combined_data.token_age_minutes ?? 30,
-        degen_audit: extractRes.data.combined_data.degen_audit || {
+        token_symbol: combinedData.token_symbol || 'UNKNOWN',
+        token_name: combinedData.token_name || 'Unknown Token',
+        token_age_minutes: combinedData.token_age_minutes ?? 30,
+        degen_audit: combinedData.degen_audit || {
           is_honeypot: false,
           has_blacklist: false,
           buy_tax_percent: 0.0,
           sell_tax_percent: 0.0
         },
-        liquidity_locked_percent: extractRes.data.combined_data.liquidity_locked_percent || 0.0,
-        volume_5m_usd: extractRes.data.combined_data.volume_5m_usd || 0.0,
-        holders_count: extractRes.data.combined_data.holders_count || 1000,
-        lp_count: extractRes.data.combined_data.lp_count || 1,
-        lp_mcap_ratio: extractRes.data.combined_data.lp_mcap_ratio || 0.01,
-        top_10_holders_percent: extractRes.data.combined_data.top_10_holders_percent || 50.0,
-        bundle_percent: extractRes.data.combined_data.bundle_percent || null
+        liquidity_locked_percent: combinedData.liquidity_locked_percent || 100.0,
+        volume_5m_usd: combinedData.volume_5m_usd || 10000.0,
+        holders_count: combinedData.holders_count || 150,
+        lp_count: combinedData.lp_count || 2,
+        lp_mcap_ratio: combinedData.lp_mcap_ratio || 0.05,
+        top_10_holders_percent: combinedData.top_10_holders_percent || 20.0,
+        bundle_percent: combinedData.bundle_percent || 30.0
+      }
+
+      // Prepare metrics from extracted data
+      const scoringData = extractRes.data.data.scoring_data || {}
+      const metrics = {
+        vol_over_avg_ratio: scoringData.vol_over_avg_ratio,
+        price_change_percent: scoringData.price_change_percent,
+        ath_hit: scoringData.ath_hit,
+        holders_growth_percent: scoringData.holders_growth_percent,
+        whale_buy_usd: scoringData.whale_buy_usd,
+        whale_buy_supply_percent: scoringData.whale_buy_supply_percent,
+        dca_accumulation_supply_percent: scoringData.dca_accumulation_supply_percent,
+        net_inflow_wallets_gt_10k_usd: scoringData.net_inflow_wallets_gt_10k_usd,
+        mentions_velocity_ratio: scoringData.mentions_velocity_ratio,
+        tier1_kol_buy_supply_percent: scoringData.tier1_kol_buy_supply_percent,
+        influencer_reach: scoringData.influencer_reach,
+        polarity_positive_percent: scoringData.polarity_positive_percent,
+        inflow_over_mcap_percent: scoringData.inflow_over_mcap_percent,
+        upgrade_or_staking_live: scoringData.upgrade_or_staking_live
       }
 
       // Then score the token
       toast.loading('Analyzing token...', { id: 'score' })
       const scoreRes = await axios.post(`${API_URL}/score`, {
-        token: tokenData
+        token: tokenData,
+        metrics: metrics
+      }, {
+        timeout: 30000,
+        headers: {
+          'Content-Type': 'application/json'
+        }
       })
       setScoreData(scoreRes.data)
       toast.success('Analysis complete!', { id: 'score' })
 
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Analysis failed')
+      console.error('Analysis error:', error)
+      toast.dismiss('extract')
+      toast.dismiss('score')
+      
+      if (error.code === 'ERR_NETWORK') {
+        toast.error('Cannot connect to backend server. Please ensure the API is running on port 8000.')
+      } else if (error.response) {
+        toast.error(error.response.data?.detail || error.response.data?.message || 'Analysis failed')
+      } else {
+        toast.error(error.message || 'Analysis failed')
+      }
     } finally {
       setLoading(false)
     }
@@ -83,31 +131,30 @@ export default function ScorePage() {
       <Toaster position="top-right" />
       
       {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
+      <div className="bg-white border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link href="/">
-                <button className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors">
-                  <ArrowLeftIcon className="w-5 h-5" />
-                  <span>Back</span>
-                </button>
-              </Link>
-              <div className="border-l border-gray-300 h-6 mx-2"></div>
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900">DVM Token Analyzer</h1>
-                <p className="text-sm text-gray-600 mt-1">Professional token analysis and scoring</p>
-              </div>
+            <Link href="/">
+              <button className="flex items-center space-x-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">
+                <ArrowLeftIcon className="w-4 h-4" />
+                <span>Back</span>
+              </button>
+            </Link>
+            <div className="text-center flex-1">
+              <h1 className="text-xl font-normal text-gray-900">DVM Token Analyzer</h1>
+              <p className="text-sm text-gray-500 mt-1">Professional token analysis and scoring</p>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-6">
               <Link href="/rank">
-                <button className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">
+                <button className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
                   Rank Multiple Tokens
                 </button>
               </Link>
-              <button className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">
-                API
-              </button>
+              <Link href="http://localhost:8000/docs" target="_blank">
+                <button className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+                  API
+                </button>
+              </Link>
             </div>
           </div>
         </div>
@@ -136,21 +183,36 @@ export default function ScorePage() {
           </div>
           
           {/* Data Coverage Indicator */}
-          {extractedData && (
+          {extractedData && extractedData.coverage && (
             <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-medium text-gray-700">Data Coverage</span>
                 <span className="text-sm font-semibold text-gray-900">
-                  {extractedData.coverage.percentage}%
+                  {Math.min(extractedData.coverage?.percentage || 0, 100)}%
                 </span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all"
-                  style={{ width: `${extractedData.coverage.percentage}%` }}
+                  className={`h-2 rounded-full transition-all ${
+                    (extractedData.coverage?.percentage || 0) >= 80 ? 'bg-green-600' : 
+                    (extractedData.coverage?.percentage || 0) >= 60 ? 'bg-blue-600' : 
+                    (extractedData.coverage?.percentage || 0) >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+                  }`}
+                  style={{ width: `${Math.min(extractedData.coverage?.percentage || 0, 100)}%` }}
                 />
               </div>
-              {extractedData.coverage.percentage < 20 && (
+              <div className="text-xs text-gray-600 mt-2">
+                {(extractedData.coverage?.percentage || 0) >= 80 ? (
+                  <span className="text-green-600">✓ Excellent data coverage</span>
+                ) : (extractedData.coverage?.percentage || 0) >= 60 ? (
+                  <span className="text-blue-600">✓ Good data coverage</span>
+                ) : (extractedData.coverage?.percentage || 0) >= 40 ? (
+                  <span className="text-yellow-600">⚠ Limited data coverage</span>
+                ) : (
+                  <span className="text-red-600">⚠ Low data coverage - results may be less accurate</span>
+                )}
+              </div>
+              {(extractedData.coverage?.percentage || 0) < 20 && (
                 <div className="text-xs text-amber-600 mt-2 flex items-center">
                   <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />

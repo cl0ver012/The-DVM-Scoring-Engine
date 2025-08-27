@@ -1,8 +1,15 @@
-pydantic>=2.7.0,<3
-pytest>=8.2.0,<9
-openai>=1.40.0,<2
-python-dotenv>=1.0.1,<2
-fastapi>=0.111.0,<1
-uvicorn>=0.30.0,<1
-selenium>=4.15.0,<5
-requests>=2.31.0,<3
+# Core dependencies
+fastapi==0.111.0
+uvicorn[standard]==0.30.0
+pydantic>=2.7.0
+
+# Data extraction
+requests==2.31.0
+beautifulsoup4==4.12.2
+
+# AI and utilities
+openai>=1.40.0
+python-dotenv>=1.0.1
+
+# Testing
+pytest>=8.2.0

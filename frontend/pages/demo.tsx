@@ -1,441 +1,468 @@
-import { useState } from 'react'
-import Link from 'next/link'
-import { ArrowLeftIcon, PlayIcon } from '@heroicons/react/24/outline'
-import { motion } from 'framer-motion'
-import axios from 'axios'
-import { DEMO_METRICS, RANKING_DEMO_DATA } from '../utils/demoData'
+import React, { useState } from 'react';
+import Link from 'next/link';
+import axios from 'axios';
+import TrenchReport from '../components/TrenchReport';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-
-// Demo scenarios
-const DEMO_SCENARIOS = {
-  scoring: [
-    {
-      id: 'high-quality',
-      name: 'High Quality Token',
-      description: 'A new token with excellent metrics across all categories',
-      token: {
-        token_address: 'HighQualityToken123',
-        token_symbol: 'QUALITY',
-        token_name: 'Quality Token',
-        token_age_minutes: 30,
-        degen_audit: {
-          is_honeypot: false,
-          has_blacklist: false,
-          buy_tax_percent: 0.0,
-          sell_tax_percent: 0.0
-        },
-        liquidity_locked_percent: 100.0,
-        volume_5m_usd: 15000.0,
-        holders_count: 500,
-        lp_count: 5,
-        lp_mcap_ratio: 0.08,
-        top_10_holders_percent: 20.0,
-        bundle_percent: 5.0
-      }
-    },
-    {
-      id: 'average-token',
-      name: 'Average Token',
-      description: 'A typical new launch with moderate metrics',
-      token: {
-        token_address: 'AverageToken456',
-        token_symbol: 'AVG',
-        token_name: 'Average Token',
-        token_age_minutes: 45,
-        degen_audit: {
-          is_honeypot: false,
-          has_blacklist: false,
-          buy_tax_percent: 2.0,
-          sell_tax_percent: 2.0
-        },
-        liquidity_locked_percent: 100.0,
-        volume_5m_usd: 6000.0,
-        holders_count: 150,
-        lp_count: 2,
-        lp_mcap_ratio: 0.03,
-        top_10_holders_percent: 28.0,
-        bundle_percent: 20.0
-      }
-    },
-    {
-      id: 'failed-prefilter',
-      name: 'Failed Pre-filter Token',
-      description: 'An older token that fails pre-filter checks',
-      token: {
-        token_address: 'OldToken789',
-        token_symbol: 'OLD',
-        token_name: 'Old Token',
-        token_age_minutes: 120, // Too old
-        degen_audit: {
-          is_honeypot: false,
-          has_blacklist: false,
-          buy_tax_percent: 0.0,
-          sell_tax_percent: 0.0
-        },
-        liquidity_locked_percent: 50.0, // Not fully locked
-        volume_5m_usd: 3000.0, // Too low
-        holders_count: 80, // Too few
-        lp_count: 1, // Only one LP
-        lp_mcap_ratio: 0.01, // Too low
-        top_10_holders_percent: 45.0, // Too concentrated
-        bundle_percent: 50.0 // Too high
-      }
+// Example data for scoring demo
+const SCORE_EXAMPLES = [
+  {
+    id: 'high-quality',
+    name: 'High Quality Token',
+    description: 'Well-distributed, high liquidity token',
+    data: {
+      token_address: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
+      token_symbol: 'BONK',
+      token_name: 'Bonk',
+      token_age_minutes: 45, // Less than 60 minutes to pass pre-filter
+      price_now: 0.00002,
+      mc_now: 1500000000,
+      volume_24h_usd: 50000000,
+      liquidity_usd: 5000000,
+      holders_count: 500000,
+      top_10_holders_percent: 25,
+      lp_count: 2, // Must be > 1
+      lp_mcap_ratio: 0.05,
+      bundle_percent: 15,
+      degen_audit: {
+        is_honeypot: false,
+        has_blacklist: false,
+        buy_tax_percent: 0,
+        sell_tax_percent: 0
+      },
+      // Additional required fields
+      liquidity_locked_percent: 100,
+      volume_5m_usd: 500000, // > $5k requirement
+      
+      // Scoring metrics
+      price_change_percent: 15,
+      vol_over_avg_ratio: 2.5,
+      whale_buy_usd: 500000,
+      whale_buy_supply_percent: 2,
+      dca_accumulation_supply_percent: 5,
+      net_inflow_wallets_gt_10k_usd: 300000,
+      mentions_velocity_ratio: 3,
+      tier1_kol_buy_supply_percent: 1,
+      influencer_reach: 50000,
+      polarity_positive_percent: 75,
+      inflow_over_mcap_percent: 0.02,
+      upgrade_or_staking_live: false,
+      holders_growth_percent: 10,
+      ath_hit: false
     }
+  },
+  {
+    id: 'risky-token',
+    name: 'Risky Token',
+    description: 'New token with concentrated holdings',
+    data: {
+      token_address: 'RISKYxxx123456789',
+      token_symbol: 'RISKY',
+      token_name: 'Risky Token',
+      token_age_minutes: 30, // Pass age check
+      price_now: 0.0000001,
+      mc_now: 100000,
+      volume_24h_usd: 50000,
+      liquidity_usd: 10000,
+      holders_count: 50, // Fail: < 100
+      top_10_holders_percent: 85, // Fail: > 30%
+      lp_count: 1, // Fail: not > 1
+      lp_mcap_ratio: 0.1,
+      bundle_percent: 60, // Fail: > 40%
+      degen_audit: {
+        is_honeypot: false,
+        has_blacklist: false,
+        buy_tax_percent: 2,
+        sell_tax_percent: 2
+      },
+      // Additional required fields
+      liquidity_locked_percent: 0, // Fail: < 100%
+      volume_5m_usd: 2000, // Fail: < $5k
+      
+      // Scoring metrics  
+      price_change_percent: -20,
+      vol_over_avg_ratio: 0.5,
+      whale_buy_usd: 0,
+      whale_buy_supply_percent: 0,
+      dca_accumulation_supply_percent: 0,
+      net_inflow_wallets_gt_10k_usd: -10000,
+      mentions_velocity_ratio: 0.5,
+      tier1_kol_buy_supply_percent: 0,
+      influencer_reach: 100,
+      polarity_positive_percent: 30,
+      inflow_over_mcap_percent: -0.1,
+      upgrade_or_staking_live: false,
+      holders_growth_percent: -5,
+      ath_hit: false
+    }
+  }
+];
+
+// Example data for ranking demo
+const RANK_EXAMPLES = {
+  'New': [
+    { id: 'NEW1xxx', symbol: 'NEW1', name: 'New Token 1', price_now: 0.0001, mc_now: 500000, vol_now: 100000, mc_change_pct: 50, top10_pct: 0.3, bundle_pct: 0.1, minutes_since_peak: 10 },
+    { id: 'NEW2xxx', symbol: 'NEW2', name: 'New Token 2', price_now: 0.00005, mc_now: 300000, vol_now: 80000, mc_change_pct: 30, top10_pct: 0.4, bundle_pct: 0.2, minutes_since_peak: 20 },
+    { id: 'NEW3xxx', symbol: 'NEW3', name: 'New Token 3', price_now: 0.00002, mc_now: 200000, vol_now: 50000, mc_change_pct: 20, top10_pct: 0.5, bundle_pct: 0.3, minutes_since_peak: 30 }
   ],
-  ranking: [
-    {
-      id: 'top-performers',
-      name: 'Top Performing Tokens',
-      description: 'Rank the best new launches',
-      tokens: [
-        'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-        'So11111111111111111111111111111111111111112',
-        'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'
-      ]
-    },
-    {
-      id: 'mixed-quality',
-      name: 'Mixed Quality Tokens',
-      description: 'Compare tokens with varying quality',
-      tokens: [
-        'TokenA123456789',
-        'TokenB987654321',
-        'TokenC555555555',
-        'TokenD111111111'
-      ]
-    }
+  'Surging': [
+    { id: 'SURGE1xxx', symbol: 'SURGE1', name: 'Surging Token 1', price_now: 0.001, mc_now: 5000000, vol_now: 1000000, mc_change_pct: 100, ath_flag: 1, whale_buy_count: 10, kolusd_now: 50000 },
+    { id: 'SURGE2xxx', symbol: 'SURGE2', name: 'Surging Token 2', price_now: 0.0005, mc_now: 3000000, vol_now: 800000, mc_change_pct: 80, ath_flag: 0, whale_buy_count: 8, kolusd_now: 30000 },
+    { id: 'SURGE3xxx', symbol: 'SURGE3', name: 'Surging Token 3', price_now: 0.0002, mc_now: 2000000, vol_now: 500000, mc_change_pct: 60, ath_flag: 1, whale_buy_count: 5, kolusd_now: 20000 }
+  ],
+  'All': [
+    { id: 'ALL1xxx', symbol: 'ALL1', name: 'All Token 1', price_now: 0.01, mc_now: 10000000, vol_now: 2000000, mc_change_pct: 25, vol_to_mc: 0.2, netflow_now: 500000, kol_velocity: 15 },
+    { id: 'ALL2xxx', symbol: 'ALL2', name: 'All Token 2', price_now: 0.005, mc_now: 8000000, vol_now: 1500000, mc_change_pct: 20, vol_to_mc: 0.18, netflow_now: 400000, kol_velocity: 12 },
+    { id: 'ALL3xxx', symbol: 'ALL3', name: 'All Token 3', price_now: 0.002, mc_now: 5000000, vol_now: 1000000, mc_change_pct: 15, vol_to_mc: 0.2, netflow_now: 300000, kol_velocity: 10 }
   ]
-}
+};
 
-export default function DemoPage() {
-  const [activeTab, setActiveTab] = useState<'scoring' | 'ranking'>('scoring')
-  const [selectedScenario, setSelectedScenario] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<any>(null)
+export default function Demo() {
+  const [activeDemo, setActiveDemo] = useState<'score' | 'rank'>('score');
+  const [selectedExample, setSelectedExample] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<'New' | 'Surging' | 'All'>('New');
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<any>(null);
 
-  const runScoringDemo = async (scenario: any) => {
-    setLoading(true)
-    setResult(null)
+  const handleScoreDemo = async (example: any) => {
+    setLoading(true);
+    setSelectedExample(example.id);
     try {
-      // Use comprehensive realistic metrics from demoData
-      const metrics = DEMO_METRICS[scenario.id as keyof typeof DEMO_METRICS]
-
-      const response = await axios.post(`${API_URL}/score`, {
-        token: scenario.token,
-        metrics: metrics
-      })
-      setResult({ type: 'scoring', data: response.data })
-    } catch (error) {
-      console.error('Demo failed:', error)
+      const response = await axios.post('http://localhost:8000/score', {
+        token: example.data,
+        metrics: {}
+      });
+      setResults(response.data);
+    } catch (error: any) {
+      console.error('Score demo error:', error);
+      alert(error.response?.data?.detail || 'Failed to score token');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const runRankingDemo = async (scenario: any) => {
-    setLoading(true)
-    setResult(null)
+  const handleRankDemo = async () => {
+    setLoading(true);
     try {
-      // Use realistic ranking data
-      const rows = RANKING_DEMO_DATA[scenario.id as keyof typeof RANKING_DEMO_DATA]
-
-      const response = await axios.post(`${API_URL}/rank`, {
-        tab: 'New',
-        rows
-      })
-      setResult({ type: 'ranking', data: response.data })
-    } catch (error) {
-      console.error('Demo failed:', error)
+      const tokens = RANK_EXAMPLES[selectedCategory];
+      const response = await axios.post('http://localhost:8000/rank', {
+        tab: selectedCategory,
+        rows: tokens.map(t => ({
+          ...t,
+          price_change_pct: t.mc_change_pct || 0,
+          mc_change_pct: t.mc_change_pct || 0,
+          vol_change_pct: 0,
+          lp_now: 100000,
+          lp_change_pct: 0,
+          lp_count: 2,
+          holders_now: 1000,
+          holders_change_pct: 0,
+          holders_per_mc: 0.0001,
+          netflow_now: t.netflow_now || 100000,
+          netflow_change_pct: 0,
+          whale_buy_count: t.whale_buy_count || 5,
+          kolusd_now: t.kolusd_now || 10000,
+          kolusd_change_pct: 0,
+          kol_velocity: t.kol_velocity || 5,
+          tx_now: 1000,
+          tx_change_pct: 0,
+          netbuy_usd_now: 50000,
+          fee_sol_now: 10,
+          fee_to_mc_pct: 0.01,
+          minutes_since_peak: t.minutes_since_peak || 30,
+          top10_pct: t.top10_pct || 0.3,
+          bundle_pct: t.bundle_pct || 0.2,
+          dca_flag: 0,
+          ath_flag: t.ath_flag || 0,
+          vol_to_mc: t.vol_to_mc || (t.vol_now / t.mc_now)
+        }))
+      });
+      setResults(response.data);
+    } catch (error: any) {
+      console.error('Rank demo error:', error);
+      alert(error.response?.data?.detail || 'Failed to rank tokens');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link href="/">
-                <button className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors">
-                  <ArrowLeftIcon className="w-5 h-5" />
-                  <span>Back</span>
-                </button>
-              </Link>
-              <div className="border-l border-gray-300 h-6 mx-2"></div>
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Demo Mode</h1>
-                <p className="text-sm text-gray-600 mt-1">Try pre-configured examples</p>
-              </div>
-            </div>
-          </div>
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6 py-6 flex justify-center items-center relative">
+          <h1 className="text-xl font-normal text-gray-900">Demo</h1>
+          <Link href="/" className="absolute right-6 text-sm text-blue-600 hover:text-blue-700">
+            Back to Home
+          </Link>
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Demo Type Selector */}
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Tab Selection */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1 mb-8">
-          <div className="flex">
-            <button
-              onClick={() => {
-                setActiveTab('scoring')
-                setSelectedScenario(null)
-                setResult(null)
-              }}
-              className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
-                activeTab === 'scoring' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Token Scoring Demos
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('ranking')
-                setSelectedScenario(null)
-                setResult(null)
-              }}
-              className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
-                activeTab === 'ranking' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Token Ranking Demos
-            </button>
-          </div>
-        </div>
-
-        {/* Instructions */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <p className="text-sm text-blue-800">
-            Click any "Run Demo" button below to see the scoring engine in action. No setup required!
-          </p>
-        </div>
-
-        {/* Scenario Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {DEMO_SCENARIOS[activeTab].map((scenario) => (
-            <div
-              key={scenario.id}
-              className={`bg-white rounded-lg shadow-sm border-2 p-6 cursor-pointer transition-all ${
-                selectedScenario === scenario.id
-                  ? 'border-blue-500 shadow-lg'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-              onClick={() => setSelectedScenario(scenario.id)}
-            >
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {scenario.name}
-              </h3>
-              <p className="text-sm text-gray-600 mb-4">
-                {scenario.description}
-              </p>
-              
-              {activeTab === 'scoring' && selectedScenario === scenario.id && (
-                <div className="text-xs text-gray-500 space-y-1 mb-4">
-                  <div>Age: {(scenario as any).token.token_age_minutes} min</div>
-                  <div>Volume: ${(scenario as any).token.volume_5m_usd.toLocaleString()}</div>
-                  <div>Holders: {(scenario as any).token.holders_count}</div>
-                </div>
-              )}
-              
-              {activeTab === 'ranking' && selectedScenario === scenario.id && (
-                <div className="text-xs text-gray-500 mb-4">
-                  {(scenario as any).tokens.length} tokens to rank
-                </div>
-              )}
-              
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setSelectedScenario(scenario.id)
-                  if (activeTab === 'scoring') {
-                    runScoringDemo(scenario)
-                  } else {
-                    runRankingDemo(scenario)
-                  }
-                }}
-                disabled={loading}
-                className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <PlayIcon className="w-4 h-4" />
-                <span>{loading && selectedScenario === scenario.id ? 'Running...' : 'Run Demo'}</span>
-              </button>
-            </div>
-          ))}
-        </div>
-
-        {/* Results Display */}
-        {result && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1 inline-flex">
+          <button
+            onClick={() => {
+              setActiveDemo('score');
+              setResults(null);
+            }}
+            className={`px-6 py-2 rounded-md font-medium transition-colors ${
+              activeDemo === 'score'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
           >
-            {result.type === 'scoring' ? (
-              <>
+            Scoring Demo
+          </button>
+          <button
+            onClick={() => {
+              setActiveDemo('rank');
+              setResults(null);
+            }}
+            className={`px-6 py-2 rounded-md font-medium transition-colors ${
+              activeDemo === 'rank'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Ranking Demo
+          </button>
+        </div>
+      </div>
+
+      {/* Score Demo */}
+      {activeDemo === 'score' && (
+        <div className="max-w-7xl mx-auto px-6 pb-12">
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Token Scoring Examples</h2>
+            <p className="text-gray-600">Select an example to see how different tokens are scored</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {SCORE_EXAMPLES.map((example) => (
+              <div
+                key={example.id}
+                className={`bg-white rounded-lg shadow-sm border-2 p-6 cursor-pointer transition-all ${
+                  selectedExample === example.id
+                    ? 'border-blue-500'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+                onClick={() => handleScoreDemo(example)}
+              >
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">{example.name}</h3>
+                <p className="text-gray-600 mb-4">{example.description}</p>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Market Cap:</span>
+                    <span className="font-medium">${(example.data.mc_now / 1e6).toFixed(2)}M</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Holders:</span>
+                    <span className="font-medium">{example.data.holders_count.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Top 10 Holders:</span>
+                    <span className="font-medium">{example.data.top_10_holders_percent}%</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Score Results */}
+          {results && activeDemo === 'score' && (
+            <div className="space-y-6">
+              {/* Input Data Section */}
+              <details className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <summary className="cursor-pointer font-semibold text-gray-900 hover:text-blue-600">
+                  📊 View Input Data
+                </summary>
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <h4 className="font-medium text-gray-700 mb-2">Token Data:</h4>
+                    <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm">
+                      {JSON.stringify(selectedExample ? SCORE_EXAMPLES.find(e => e.id === selectedExample)?.data : {}, null, 2)}
+                    </pre>
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-gray-700 mb-2">Metrics:</h4>
+                    <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm">
+                      {JSON.stringify({}, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </details>
+
+              {/* Scoring Results */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Scoring Results</h3>
                 
-                {/* Pre-filter Status */}
-                <div className={`mb-6 p-4 rounded-lg ${
-                  result.data.passed_prefilter 
-                    ? 'bg-green-50 border border-green-200' 
-                    : 'bg-red-50 border border-red-200'
-                }`}>
-                  <div className="flex items-center">
-                    <span className={`text-lg font-semibold ${
-                      result.data.passed_prefilter ? 'text-green-800' : 'text-red-800'
+                <div className="mb-6">
+                  <div className="text-center">
+                    <div className="text-4xl font-bold text-gray-900 mb-2">
+                      {results.total?.toFixed(2) || '0.00'}
+                    </div>
+                    <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                      results.passed_prefilter 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
                     }`}>
-                      Pre-filter: {result.data.passed_prefilter ? '✅ PASSED' : '❌ FAILED'}
-                    </span>
+                      {results.passed_prefilter ? '✓ Passed Pre-filter' : '✗ Failed Pre-filter'}
+                    </div>
                   </div>
-                  {!result.data.passed_prefilter && (
-                    <div className="mt-2 text-sm text-red-700">
-                      Failed checks: {result.data.failed_checks.join(', ')}
-                    </div>
-                  )}
                 </div>
 
-                {result.data.passed_prefilter && (
-                  <>
-                    {/* Total Score */}
-                    <div className="text-center mb-6">
-                      <div className="text-4xl font-bold text-gray-900">
-                        {result.data.total.toFixed(1)}
-                      </div>
-                      <div className="text-sm text-gray-600">Total Score (out of 100)</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 mb-1">Momentum</div>
+                    <div className="text-xl font-semibold text-gray-900">
+                      {results.momentum?.toFixed(2) || '0.00'}
                     </div>
-
-                    {/* Category Scores */}
-                    <div className="grid grid-cols-4 gap-4 mb-6">
-                      <div className="text-center">
-                        <div className="text-2xl font-semibold text-blue-600">
-                          {result.data.momentum.toFixed(1)}
-                        </div>
-                        <div className="text-sm text-gray-600">Momentum</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-semibold text-green-600">
-                          {result.data.smart_money.toFixed(1)}
-                        </div>
-                        <div className="text-sm text-gray-600">Smart Money</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-semibold text-purple-600">
-                          {result.data.sentiment.toFixed(1)}
-                        </div>
-                        <div className="text-sm text-gray-600">Sentiment</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-semibold text-orange-600">
-                          {result.data.event.toFixed(1)}
-                        </div>
-                        <div className="text-sm text-gray-600">Event</div>
-                      </div>
-                    </div>
-
-                    {/* Timeframe Analysis */}
-                    {result.data.new_scores && (
-                      <div className="border-t border-gray-200 pt-4">
-                        <h4 className="text-sm font-medium text-gray-700 mb-3">Timeframe Analysis</h4>
-                        <div className="grid grid-cols-4 gap-4">
-                          {Object.entries(result.data.new_scores).map(([tf, score]) => (
-                            <div key={tf} className="text-center">
-                              <div className="text-lg font-semibold text-gray-900">
-                                {(score as number).toFixed(1)}
-                              </div>
-                              <div className="text-xs text-gray-600">{tf}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* AI Report */}
-                    {result.data.trench_report_markdown && (
-                      <div className="border-t border-gray-200 pt-6 mt-6">
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">AI Analysis Report</h4>
-                        <div className="bg-gray-50 rounded-lg p-6 prose prose-sm max-w-none">
-                          <div className="text-gray-700 whitespace-pre-wrap">
-                            {result.data.trench_report_markdown}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
-            ) : (
-              <>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Ranking Results - {result.data.tab} Category
-                </h3>
-                
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead>
-                      <tr>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rank</th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Token</th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Score</th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">24h %</th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Market Cap</th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Volume</th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Holders</th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Whales</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {result.data.rows.map((row: any, index: number) => (
-                        <tr key={row.id} className={index === 0 ? 'bg-blue-50' : ''}>
-                          <td className="px-3 py-3 text-sm font-medium text-gray-900">#{index + 1}</td>
-                          <td className="px-3 py-3">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{row.symbol}</div>
-                              <div className="text-xs text-gray-500">{row.name}</div>
-                            </div>
-                          </td>
-                          <td className="px-3 py-3">
-                            <div className="text-sm font-bold text-gray-900">{row.score?.toFixed(1) || '0.0'}</div>
-                            <div className="text-xs text-gray-500">
-                              {row.ath_flag ? '🔥 ATH' : ''} {row.dca_flag ? '💎 DCA' : ''}
-                            </div>
-                          </td>
-                          <td className="px-3 py-3 text-sm text-gray-900">
-                            ${row.price_now < 0.01 ? row.price_now.toExponential(2) : row.price_now.toFixed(4)}
-                          </td>
-                          <td className={`px-3 py-3 text-sm font-medium ${row.price_change_pct > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {row.price_change_pct > 0 ? '+' : ''}{(row.price_change_pct * 100).toFixed(2)}%
-                          </td>
-                          <td className="px-3 py-3 text-sm text-gray-600">
-                            ${row.mc_now > 1000000 ? `${(row.mc_now / 1000000).toFixed(1)}M` : `${(row.mc_now / 1000).toFixed(1)}K`}
-                          </td>
-                          <td className="px-3 py-3 text-sm text-gray-600">
-                            ${row.vol_now > 1000000 ? `${(row.vol_now / 1000000).toFixed(1)}M` : `${(row.vol_now / 1000).toFixed(1)}K`}
-                          </td>
-                          <td className="px-3 py-3 text-sm text-gray-600">
-                            {row.holders_now > 1000 ? `${(row.holders_now / 1000).toFixed(1)}K` : row.holders_now}
-                          </td>
-                          <td className="px-3 py-3 text-sm text-gray-600">
-                            {row.whale_buy_count} buys
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="text-sm text-gray-600 mb-1">Smart Money</div>
+                    <div className="text-xl font-semibold text-gray-900">
+                    {results.smart_money?.toFixed(2) || '0.00'}
+                  </div>
                 </div>
-              </>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-sm text-gray-600 mb-1">Sentiment</div>
+                  <div className="text-xl font-semibold text-gray-900">
+                    {results.sentiment?.toFixed(2) || '0.00'}
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-sm text-gray-600 mb-1">Event</div>
+                  <div className="text-xl font-semibold text-gray-900">
+                    {results.event?.toFixed(2) || '0.00'}
+                  </div>
+                </div>
+              </div>
+
+              {results.failed_checks && results.failed_checks.length > 0 && (
+                <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-red-800 mb-2">Failed Checks:</h4>
+                  <ul className="list-disc list-inside text-sm text-red-700 space-y-1">
+                    {results.failed_checks.map((check: string, index: number) => (
+                      <li key={index}>{check}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* AI Report */}
+            {results.trench_report_markdown && (
+              <TrenchReport markdown={results.trench_report_markdown} />
             )}
-          </motion.div>
-        )}
-      </div>
+          </div>
+          )}
+        </div>
+      )}
+
+      {/* Rank Demo */}
+      {activeDemo === 'rank' && (
+        <div className="max-w-7xl mx-auto px-6 pb-12">
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Token Ranking Examples</h2>
+            <p className="text-gray-600">See how tokens are ranked in different categories</p>
+          </div>
+
+          {/* Category Selector */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Category</h3>
+            <div className="flex gap-4">
+              {(['New', 'Surging', 'All'] as const).map((category) => (
+                <button
+                  key={category}
+                  onClick={() => setSelectedCategory(category)}
+                  className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                    selectedCategory === category
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={handleRankDemo}
+              className="mt-4 w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+              disabled={loading}
+            >
+              {loading ? 'Processing...' : 'Run Ranking Demo'}
+            </button>
+          </div>
+
+          {/* Rank Results */}
+          {results && activeDemo === 'rank' && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {results.tab} Category Rankings
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Rank
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Token
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Price
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Market Cap
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Score
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {results.rows.map((row: any, index: number) => (
+                      <tr key={row.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          #{index + 1}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{row.symbol}</div>
+                            <div className="text-sm text-gray-500">{row.name}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          ${row.price_now.toFixed(6)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          ${(row.mc_now / 1e6).toFixed(2)}M
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {row.rank_score?.toFixed(4) || '0.0000'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Loading Overlay */}
+      {loading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 shadow-xl">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-700">Processing...</p>
+          </div>
+        </div>
+      )}
     </div>
-  )
+  );
 }

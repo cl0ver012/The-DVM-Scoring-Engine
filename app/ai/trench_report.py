@@ -95,6 +95,14 @@ def _build_user_prompt(data: TrenchInput) -> str:
 
 
 def generate_trench_report(data: TrenchInput, client: ChatClient, model: str = "gpt-4o", temperature: float = 0.2, max_tokens: int = 1000) -> str:
+    # Check if using MockChatClient
+    from app.ai.client import MockChatClient
+    if isinstance(client, MockChatClient):
+        # Generate dynamic report based on actual data
+        from app.ai.dynamic_report import generate_dynamic_report
+        return generate_dynamic_report(data)
+    
+    # Otherwise use OpenAI
     prompt = _build_user_prompt(data)
     return client.complete(SYSTEM_PROMPT, prompt, model=model, temperature=temperature, max_tokens=max_tokens)
 

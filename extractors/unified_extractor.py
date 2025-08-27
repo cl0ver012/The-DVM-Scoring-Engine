@@ -12,6 +12,10 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional, Any, List
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 class UnifiedTokenExtractor:
     def __init__(self):
@@ -25,7 +29,7 @@ class UnifiedTokenExtractor:
         self.apis = {
             'dexscreener': "https://api.dexscreener.com/latest/dex/tokens/",
             'jupiter': "https://price.jup.ag/v4/price",
-            'birdeye': "https://public-api.birdeye.so/public/token_overview",
+            'birdeye': "https://public-api.birdeye.so",
             'helius': "https://api.helius.xyz/v0/addresses",
         }
         
@@ -185,23 +189,78 @@ class UnifiedTokenExtractor:
             return None
     
     def get_birdeye_data(self, token_address: str) -> Optional[Dict[str, Any]]:
-        """Get market data from Birdeye (if API key available)"""
+        """Get price history and changes from Birdeye (working endpoints only)"""
         if not self.birdeye_key:
             return None
             
         try:
-            url = f"{self.apis['birdeye']}?address={token_address}"
+            result = {}
             headers = {'X-API-KEY': self.birdeye_key}
-            response = self.session.get(url, headers=headers, timeout=5)
             
-            if response.status_code == 200:
-                data = response.json()
-                return {
-                    'holders_count': data.get('holder', 0),
-                    'unique_traders_24h': data.get('uniqueTraders24h', 0),
-                    'trade_24h': data.get('trade24h', 0),
+            # 1. Get current price
+            price_url = f"{self.apis['birdeye']}/defi/price"
+            price_params = {'address': token_address}
+            
+            price_response = self.session.get(price_url, headers=headers, params=price_params, timeout=5)
+            if price_response.status_code == 200:
+                price_data = price_response.json().get('data', {})
+                result['price_now'] = price_data.get('value', 0)
+                result['price_change_24h_percent'] = price_data.get('priceChange24h', 0)
+            
+            # 2. Get price history for multiple timeframes
+            current_time = int(time.time())
+            timeframes = {
+                '5m': 300,
+                '15m': 900,
+                '30m': 1800,
+                '1h': 3600,
+                '24h': 86400
+            }
+            
+            for tf_name, seconds in timeframes.items():
+                history_url = f"{self.apis['birdeye']}/defi/history_price"
+                
+                # Determine the appropriate interval type
+                if seconds <= 900:  # 15m or less
+                    interval_type = '1m'
+                elif seconds <= 3600:  # 1h or less
+                    interval_type = '15m'
+                else:  # 24h
+                    interval_type = '30m'  # Use 30m for 24h data
+                
+                history_params = {
+                    'address': token_address,
+                    'type': interval_type,
+                    'time_from': current_time - seconds,
+                    'time_to': current_time
                 }
-            return None
+                
+                try:
+                    history_response = self.session.get(history_url, headers=headers, params=history_params, timeout=5)
+                    if history_response.status_code == 200:
+                        history_data = history_response.json().get('data', {})
+                        items = history_data.get('items', [])
+                        
+                        if len(items) >= 2:
+                            old_price = items[0]['value']
+                            new_price = items[-1]['value']
+                            change_pct = ((new_price - old_price) / old_price) * 100 if old_price > 0 else 0
+                            
+                            result[f'price_change_{tf_name}_percent'] = change_pct
+                            
+                            # For momentum scoring
+                            if tf_name == '1h':
+                                result['price_change_percent'] = change_pct
+                    else:
+                        print(f"Birdeye {tf_name} failed: {history_response.status_code}")
+                except Exception as e:
+                    print(f"Birdeye {tf_name} error: {e}")
+                    continue
+                
+                time.sleep(1.1)  # Respect rate limits (1 req/sec)
+            
+            return result if result else None
+            
         except Exception as e:
             print(f"Birdeye error: {e}")
             return None
@@ -321,8 +380,34 @@ class UnifiedTokenExtractor:
         }
         result["summary"] = summary
 
-def extract_token_data(token_address: str) -> Dict[str, Any]:
+def extract_token_data(token_address: str, fast_mode: bool = False) -> Dict[str, Any]:
     """Main function to extract token data"""
+    # Import the perfect extractor
+    try:
+        from extractors.perfect_extractor import extract_token_data as perfect_extract
+        
+        # Use the perfect extractor with all three APIs
+        result = perfect_extract(token_address)
+        
+        # Transform to match expected format
+        if result:
+            # Combine pre-filter and scoring data
+            combined_data = {}
+            combined_data.update(result.get('pre_filter_data', {}))
+            combined_data.update(result.get('scoring_data', {}))
+            
+            # Return in expected format
+            return {
+                'token_address': token_address,
+                'extraction_timestamp': result.get('extraction_timestamp'),
+                'data_sources': result.get('data_sources', {}),
+                'combined_data': combined_data,
+                'coverage': result.get('coverage', {})
+            }
+    except Exception as e:
+        print(f"Perfect extractor error: {e}")
+    
+    # Fallback to original extractor
     extractor = UnifiedTokenExtractor()
     return extractor.extract_all_data(token_address)
 

@@ -1,248 +1,469 @@
-from __future__ import annotations
-
-import os
-from datetime import datetime, timezone
-from typing import List
-from dotenv import load_dotenv
-
+"""FastAPI server for DVM Scoring Engine"""
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
+import traceback
+import os
+from dotenv import load_dotenv
+
+from app.api.schemas import (
+    ScoreRequest, ScoreResponse, 
+    RankRequest, RankResponse
+)
+from typing import Dict, Any, Optional
+from pydantic import BaseModel
+
+# Define missing request/response models
+class ExtractRequest(BaseModel):
+    token_address: str
+
+class ExtractResponse(BaseModel):
+    success: bool
+    data: Optional[Dict[str, Any]]
+    message: str
+
+class ReportRequest(BaseModel):
+    token_data: Dict[str, Any]
+    metrics: Dict[str, Any]
+    score: float
+
+class ReportResponse(BaseModel):
+    report: Dict[str, Any]
+from app.utils.pre_filter import run_pre_filter
+from app.models.token import TokenData, DegenAudit
+from app.models.metrics import ScoreMetrics, MomentumMetrics, SmartMoneyMetrics, SentimentMetrics, EventMetrics
+from app.engine.scoring_engine import ScoringEngine
+from app.ranker.formulas import score_new, score_surging, score_all
+from app.ai.trench_report import generate_trench_report, TrenchInput
+from app.ai.client import OpenAIChatClient
+from extractors.unified_extractor import extract_token_data
 
 # Load environment variables
 load_dotenv()
 
-from app.ai.client import OpenAIChatClient, MockChatClient
-from app.ai.trench_report import TrenchInput, generate_trench_report
-from app.engine.scoring_engine import ScoringEngine
-from app.models.metrics import EventMetrics, MomentumMetrics, ScoreMetrics, SentimentMetrics, SmartMoneyMetrics
-from app.models.results import PreFilterResult
-from app.models.token import TokenData
-from app.utils.pre_filter import run_pre_filter
-from app.api.schemas import ScoreRequest, ScoreResponse, RankResponse, RankRequest
-from app.ranker.formulas import score_new, score_surging, score_all
-import sys
-sys.path.append('.')  # Add root to path for extractors import
+# Initialize FastAPI app
+app = FastAPI(
+    title="DVM Scoring Engine API",
+    description="Deep Value Memetics token scoring and ranking system",
+    version="1.0.0"
+)
 
-
-app = FastAPI(title="DVM Scoring Engine")
-
-# Configure CORS
+# Configure CORS - Allow all origins during development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
+# Initialize components
+scoring_engine = ScoringEngine()
+# Initialize chat client - always use mock for demo
+# To use real OpenAI, ensure you have a valid API key in .env
+use_mock = True  # Set to False when you have a valid OpenAI API key
+
+if use_mock:
+    print("ℹ️ Using demo AI reports (set use_mock=False in server.py to use OpenAI)")
+else:
+    try:
+        # Check if API key is actually set and not empty
+        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if not api_key or api_key == "sk-proj-REPLACE_ME":
+            raise RuntimeError("OPENAI_API_KEY not configured")
+        chat_client = OpenAIChatClient()
+    except (RuntimeError, Exception) as e:
+        print(f"⚠️ Warning: OpenAI not available ({e}) - Using demo AI reports")
+        use_mock = True
+
+if use_mock or 'chat_client' not in locals():
+    from app.ai.client import MockChatClient
+    # We'll create dynamic reports in the generate_trench_report function
+    chat_client = MockChatClient("")  # Empty default, will be replaced dynamically
 
 @app.get("/")
-def root():
-    """Root endpoint providing API information and health check."""
+async def root():
+    """Root endpoint"""
     return {
-        "message": "DVM Scoring Engine",
+        "message": "DVM Scoring Engine API",
         "version": "1.0.0",
-        "status": "active",
-        "description": "AI-powered Solana token analysis with pre-filtering, scoring, and ranking",
-        "endpoints": {
-            "POST /score": "Score individual tokens with AI analysis",
-            "POST /rank": "Rank multiple tokens by category (New/Surging/All)"
-        }
+        "endpoints": [
+            "/extract - Extract token data from multiple sources",
+            "/score - Score a single token",
+            "/rank - Rank multiple tokens",
+            "/report - Generate AI trench report"
+        ]
     }
 
+@app.post("/extract", response_model=ExtractResponse)
+async def post_extract(request: ExtractRequest):
+    """Extract token data from all sources"""
+    try:
+        print(f"\n📊 Extracting data for token: {request.token_address}")
+        
+        # Extract data using unified extractor
+        result = extract_token_data(request.token_address)
+        
+        # Print extracted scoring variables
+        if result and 'combined_data' in result:
+            data = result['combined_data']
+            print("\n" + "="*60)
+            print("🎯 EXTRACTED SCORING VARIABLES FROM APIs")
+            print("="*60)
+            
+            scoring_vars = {
+                "📊 MOMENTUM": [
+                    ("price_change_percent", data.get('price_change_percent')),
+                    ("price_change_5m_percent", data.get('price_change_5m_percent')),
+                    ("price_change_24h_percent", data.get('price_change_24h_percent')),
+                    ("vol_over_avg_ratio", data.get('vol_over_avg_ratio')),
+                ],
+                "💰 MARKET DATA": [
+                    ("price_now", data.get('price_now')),
+                    ("mc_now", data.get('mc_now')),
+                    ("volume_24h_usd", data.get('volume_24h_usd')),
+                    ("liquidity_usd", data.get('liquidity_usd')),
+                ],
+                "👥 HOLDERS": [
+                    ("holders_count", data.get('holders_count')),
+                    ("top_10_holders_percent", data.get('top_10_holders_percent')),
+                ]
+            }
+            
+            for category, vars in scoring_vars.items():
+                print(f"\n{category}:")
+                for name, value in vars:
+                    if value is not None:
+                        print(f"  ✅ {name}: {value}")
+                    else:
+                        print(f"  ❌ {name}: Not available")
+            
+            print("="*60 + "\n")
+        
+        return ExtractResponse(
+            success=True,
+            data=result,
+            message="Data extraction completed"
+        )
+        
+    except Exception as e:
+        print(f"❌ Extraction error: {str(e)}")
+        traceback.print_exc()
+        return ExtractResponse(
+            success=False,
+            data=None,
+            message=f"Extraction failed: {str(e)}"
+        )
 
 @app.post("/score", response_model=ScoreResponse)
-def post_score(req: ScoreRequest):
+async def post_score(request: ScoreRequest):
+    """Score a single token"""
     try:
-        token = TokenData.model_validate(req.token)
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Invalid token data: {str(e)}")
-    
-    pre: PreFilterResult = run_pre_filter(token)
-
-    # For demo, build metrics from req.metrics shallowly
-    m = req.metrics
-    metrics = ScoreMetrics(
-        momentum=MomentumMetrics(**(m.get("momentum") or {})),
-        smart_money=SmartMoneyMetrics(**(m.get("smart_money") or {})),
-        sentiment=SentimentMetrics(**(m.get("sentiment") or {})),
-        event=EventMetrics(**(m.get("event") or {})),
-    )
-
-    engine = ScoringEngine()
-    # Default to 1h timeframe for main scoring (most stable)
-    breakdown = engine.score(metrics, "1h")
-    
-    # Calculate multi-timeframe scores for NEW category (client requirement)
-    new_timeframe_scores = engine.score_all_timeframes(metrics)
-
-    resp = ScoreResponse(
-        passed_prefilter=pre.passed,
-        failed_checks=pre.failed_checks,
-        breakdown={
-            "momentum": breakdown.momentum,
-            "smart_money": breakdown.smart_money,
-            "sentiment": breakdown.sentiment,
-            "event": breakdown.event,
-        },
-        total=breakdown.total,
-        momentum=breakdown.momentum,
-        smart_money=breakdown.smart_money,
-        sentiment=breakdown.sentiment,
-        event=breakdown.event,
-        new_scores=new_timeframe_scores,  # Multi-timeframe as client requested
-    )
-
-    # Generate AI summary (uses mock if no API key)
-    if True:  # Always generate for demos
-        try:
-            # Try to use OpenAI client, fall back to mock for demos
-            try:
-                client = OpenAIChatClient()
-            except:
-                # Create a comprehensive demo AI report
-                momentum_trend = "📈 Strong upward momentum" if breakdown.momentum > 15 else "📊 Moderate momentum building" if breakdown.momentum > 10 else "📉 Weak momentum signals"
-                smart_money_status = "🐋 Whales accumulating heavily" if breakdown.smart_money > 15 else "💰 Smart money showing interest" if breakdown.smart_money > 10 else "⚠️ Limited smart money activity"
-                sentiment_reading = "🔥 Viral growth detected" if breakdown.sentiment > 10 else "💬 Growing community interest" if breakdown.sentiment > 5 else "🤔 Low social engagement"
-                event_status = "🚀 Major catalysts active" if breakdown.event > 10 else "📰 Some positive developments" if breakdown.event > 5 else "📅 No significant events"
-                
-                best_tf = max(new_timeframe_scores, key=new_timeframe_scores.get)
-                
-                demo_report = f"""# DVM Trenches Report: {token.token_symbol}
-
-## Executive Summary
-**{token.token_name} ({token.token_symbol})** has generated a composite score of **{breakdown.total:.1f}/100** in our proprietary DVM scoring system. {"This places it in the TOP TIER of newly launched tokens. Immediate attention warranted." if breakdown.total > 70 else "The token shows MODERATE potential with room for growth." if breakdown.total > 50 else "Current metrics indicate LIMITED appeal. Proceed with caution."}
-
-## Score Analysis
-
-### {momentum_trend}
-**Score: {breakdown.momentum:.1f}/25**
-{"The token is experiencing explosive growth with volume surging across all timeframes. Price action shows strong buyer conviction with minimal retracements. This momentum profile typically precedes major moves." if breakdown.momentum > 15 else "Steady accumulation pattern emerging with consistent volume increases. Price structure remains constructive but needs catalyst for breakout." if breakdown.momentum > 10 else "Momentum indicators are weak. Volume declining and price action choppy. Wait for trend reversal confirmation."}
-
-### {smart_money_status}  
-**Score: {breakdown.smart_money:.1f}/25**
-{"Major whale wallets detected accumulating aggressively. Net inflows from known smart money addresses exceed $500K in past hour. Insider accumulation pattern strongly bullish." if breakdown.smart_money > 15 else "Smart money beginning to take positions. Several mid-tier whales buying dips. Accumulation phase may be starting." if breakdown.smart_money > 10 else "Minimal smart money involvement. Most volume from retail traders. Whales notably absent from order flow."}
-
-### {sentiment_reading}
-**Score: {breakdown.sentiment:.1f}/25**  
-{"Social metrics exploding with mentions up 500%+. Multiple tier-1 influencers discussing. Trending on major crypto platforms. Community growth parabolic." if breakdown.sentiment > 10 else "Organic community growth detected. Engagement rates improving. Some influencer interest emerging. Sentiment turning positive." if breakdown.sentiment > 5 else "Limited social presence. Community small but could grow. Needs marketing push to gain traction."}
-
-### {event_status}
-**Score: {breakdown.event:.1f}/25**
-{"MAJOR CATALYSTS: Exchange listing confirmed, strategic partnership announced, staking going live. Multiple positive events creating perfect storm." if breakdown.event > 10 else "Some positive developments including DEX integrations and minor partnerships. More catalysts needed for significant impact." if breakdown.event > 5 else "No significant events or announcements. Project needs newsflow to generate interest."}
-
-## Multi-Timeframe Analysis
-Optimal entry timeframe: **{best_tf}** (Score: {new_timeframe_scores[best_tf]:.1f})
-
-**Timeframe Breakdown:**
-- 5m: {new_timeframe_scores.get('5m', 0):.1f} - {"🟢 Bullish" if new_timeframe_scores.get('5m', 0) > 50 else "🟡 Neutral" if new_timeframe_scores.get('5m', 0) > 30 else "🔴 Bearish"}
-- 15m: {new_timeframe_scores.get('15m', 0):.1f} - {"🟢 Bullish" if new_timeframe_scores.get('15m', 0) > 50 else "🟡 Neutral" if new_timeframe_scores.get('15m', 0) > 30 else "🔴 Bearish"}  
-- 30m: {new_timeframe_scores.get('30m', 0):.1f} - {"🟢 Bullish" if new_timeframe_scores.get('30m', 0) > 50 else "🟡 Neutral" if new_timeframe_scores.get('30m', 0) > 30 else "🔴 Bearish"}
-- 1h: {new_timeframe_scores.get('1h', 0):.1f} - {"🟢 Bullish" if new_timeframe_scores.get('1h', 0) > 50 else "🟡 Neutral" if new_timeframe_scores.get('1h', 0) > 30 else "🔴 Bearish"}
-
-## On-Chain Metrics
-- **Age**: {token.token_age_minutes} minutes old ({"✅ Fresh launch" if token.token_age_minutes < 60 else "⚠️ Not a new launch"})
-- **Holders**: {token.holders_count:,} ({"🚀 Rapid distribution" if token.holders_count > 500 else "📊 Growing steadily" if token.holders_count > 200 else "⚠️ Low adoption"})
-- **Volume (5m)**: ${token.volume_5m_usd:,.0f} ({"🔥 High activity" if token.volume_5m_usd > 10000 else "📊 Moderate activity" if token.volume_5m_usd > 5000 else "❄️ Low activity"})
-- **Liquidity**: {token.lp_count} pools, {token.lp_mcap_ratio:.1%} of MCap ({"💎 Deep liquidity" if token.lp_mcap_ratio > 0.05 else "💧 Adequate liquidity" if token.lp_mcap_ratio > 0.02 else "⚠️ Thin liquidity"})
-- **Top 10 Holders**: {token.top_10_holders_percent:.1f}% ({"✅ Well distributed" if token.top_10_holders_percent < 30 else "⚠️ Concentrated"})
-
-## Trading Recommendation
-{"🟢 **STRONG BUY** - All systems firing on all cylinders. This token exhibits characteristics of previous 100x performers. Entry at current levels recommended with appropriate position sizing. Set stop loss at -15% from entry." if breakdown.total > 70 else "🟡 **ACCUMULATE** - Promising project with solid fundamentals. Consider building position on dips. Wait for momentum confirmation before full allocation. Risk/reward favorable for patient investors." if breakdown.total > 50 else "🔴 **AVOID/WAIT** - Current metrics do not support investment. Multiple red flags present. Wait for significant improvement in scores before considering entry. High risk of further downside."}
-
-## Risk Factors
-{"- Extremely new token, unproven track record\n- High volatility expected\n- Smart contract not fully audited\n- Potential for rapid price swings" if token.token_age_minutes < 60 else "- Limited upside momentum\n- Weak community engagement\n- No major catalysts on horizon\n- Better opportunities available"}
-
----
-*Generated by DVM Scoring Engine | Professional Trading Intelligence*"""
-                client = MockChatClient(demo_report)
-            
-            # Build meaningful signals from the metrics and scores
-            signals = []
-            if breakdown.momentum > 15:
-                signals.append(f"1h: momentum score {breakdown.momentum:.1f}")
-            if breakdown.smart_money > 15:
-                signals.append(f"1h: smart money score {breakdown.smart_money:.1f}")
-            if breakdown.sentiment > 5:
-                signals.append(f"1h: sentiment score {breakdown.sentiment:.1f}")
-            if breakdown.event > 5:
-                signals.append(f"1h: event score {breakdown.event:.1f}")
-            
-            # Add multi-timeframe signals
-            best_timeframe = max(new_timeframe_scores, key=new_timeframe_scores.get)
-            signals.append(f"best timeframe: {best_timeframe} ({new_timeframe_scores[best_timeframe]:.1f})")
-            if token.volume_5m_usd > 10000:
-                signals.append(f"5m: volume ${token.volume_5m_usd/1000:.0f}K")
-            if token.lp_count > 2:
-                signals.append(f"lp_count: {token.lp_count} pools")
-            if token.lp_mcap_ratio > 0.05:
-                signals.append(f"lp/mcap: {token.lp_mcap_ratio:.1%}")
-            
-            ti = TrenchInput(
-                token={"symbol": token.token_symbol, "name": token.token_name, "address": token.token_address},
-                prefilter={"passed": pre.passed, "failed_checks": pre.failed_checks},
-                scores={
-                    "momentum": breakdown.momentum,
-                    "smart_money": breakdown.smart_money,
-                    "sentiment": breakdown.sentiment,
-                    "event": breakdown.event,
-                    "total": breakdown.total,
-                },
-                signals=signals,
-                metrics={
-                    "holders": token.holders_count, 
-                    "top10_pct": token.top_10_holders_percent, 
-                    "vol_5m_usd": token.volume_5m_usd, 
-
-                    "lp_locked_pct": token.liquidity_locked_percent,
-                    "age_minutes": token.token_age_minutes
-                },
-                timeframe="multi",  # Indicate multi-timeframe analysis
-                as_of_utc=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        # Extract token data from request
+        token_data = request.token
+        token_address = token_data.get('token_address', 'Unknown')
+        print(f"\n🎯 Scoring token: {token_address}")
+        
+        # Run pre-filter
+        # Convert dict to TokenData model
+        # Ensure degen_audit is properly formatted
+        if 'degen_audit' not in token_data or token_data['degen_audit'] is None:
+            token_data['degen_audit'] = DegenAudit(
+                is_honeypot=False,
+                has_blacklist=False,
+                buy_tax_percent=0.0,
+                sell_tax_percent=0.0
             )
-            content = generate_trench_report(ti, client)
-            resp.trench_report_markdown = content
-        except Exception as e:
-            # Graceful fallback - don't break the API if AI fails
-            resp.trench_report_markdown = f"AI report unavailable: {str(e)}"
-
-    return resp
-
+        elif isinstance(token_data['degen_audit'], dict):
+            token_data['degen_audit'] = DegenAudit(**token_data['degen_audit'])
+        
+        token_model = TokenData(**token_data)
+        pre_filter_result = run_pre_filter(token_model)
+        
+        if not pre_filter_result.passed:
+            return ScoreResponse(
+                passed_prefilter=False,
+                failed_checks=pre_filter_result.failed_checks,
+                breakdown={},
+                total=0.0,
+                momentum=0.0,
+                smart_money=0.0,
+                sentiment=0.0,
+                event=0.0
+            )
+        
+        # Create metrics from token data
+        # Extract metrics from token_data or request.metrics
+        metrics_data = request.metrics if request.metrics else {}
+        
+        # Create metrics object
+        metrics = ScoreMetrics(
+            momentum=MomentumMetrics(
+                vol_over_avg_ratio=metrics_data.get('vol_over_avg_ratio', 1.0),
+                price_change_percent=metrics_data.get('price_change_percent', 0.0),
+                ath_hit=metrics_data.get('ath_hit', False),
+                holders_growth_percent=metrics_data.get('holders_growth_percent', 0.0)
+            ),
+            smart_money=SmartMoneyMetrics(
+                whale_buy_usd=metrics_data.get('whale_buy_usd', 0.0),
+                whale_buy_supply_percent=metrics_data.get('whale_buy_supply_percent', 0.0),
+                dca_accumulation_supply_percent=metrics_data.get('dca_accumulation_supply_percent', 0.0),
+                net_inflow_wallets_gt_10k_usd=metrics_data.get('net_inflow_wallets_gt_10k_usd', 0.0)
+            ),
+            sentiment=SentimentMetrics(
+                mentions_velocity_ratio=metrics_data.get('mentions_velocity_ratio', 1.0),
+                tier1_kol_buy_supply_percent=metrics_data.get('tier1_kol_buy_supply_percent', 0.0),
+                influencer_reach=metrics_data.get('influencer_reach', 0),
+                polarity_positive_percent=metrics_data.get('polarity_positive_percent', 50.0)
+            ),
+            event=EventMetrics(
+                inflow_over_mcap_percent=metrics_data.get('inflow_over_mcap_percent', 0.0),
+                upgrade_or_staking_live=metrics_data.get('upgrade_or_staking_live', False)
+            )
+        )
+        
+        # Calculate scores using the scoring engine
+        score_result = scoring_engine.score(metrics, "1h")
+        total_score = score_result.total
+        
+        # Print extracted scoring variables
+        print("\n" + "="*60)
+        print("🔍 EXTRACTED SCORING VARIABLES")
+        print("="*60)
+        
+        print("\n📊 MOMENTUM METRICS:")
+        print(f"  vol_over_avg_ratio: {metrics.momentum.vol_over_avg_ratio}")
+        print(f"  price_change_percent: {metrics.momentum.price_change_percent}")
+        print(f"  ath_hit: {metrics.momentum.ath_hit}")
+        print(f"  holders_growth_percent: {metrics.momentum.holders_growth_percent}")
+        
+        print("\n💰 SMART MONEY METRICS:")
+        print(f"  whale_buy_usd: {metrics.smart_money.whale_buy_usd}")
+        print(f"  whale_buy_supply_percent: {metrics.smart_money.whale_buy_supply_percent}")
+        print(f"  dca_accumulation_supply_percent: {metrics.smart_money.dca_accumulation_supply_percent}")
+        print(f"  net_inflow_wallets_gt_10k_usd: {metrics.smart_money.net_inflow_wallets_gt_10k_usd}")
+        
+        print("\n💬 SENTIMENT METRICS:")
+        print(f"  mentions_velocity_ratio: {metrics.sentiment.mentions_velocity_ratio}")
+        print(f"  tier1_kol_buy_supply_percent: {metrics.sentiment.tier1_kol_buy_supply_percent}")
+        print(f"  influencer_reach: {metrics.sentiment.influencer_reach}")
+        print(f"  polarity_positive_percent: {metrics.sentiment.polarity_positive_percent}")
+        
+        print("\n🎯 EVENT METRICS:")
+        print(f"  inflow_over_mcap_percent: {metrics.event.inflow_over_mcap_percent}")
+        print(f"  upgrade_or_staking_live: {metrics.event.upgrade_or_staking_live}")
+        
+        print("="*60 + "\n")
+        
+        # Build response matching schema
+        breakdown = {
+            "momentum": score_result.momentum,
+            "smart_money": score_result.smart_money,
+            "sentiment": score_result.sentiment,
+            "event": score_result.event
+        }
+        
+        # Generate AI report if requested
+        trench_report = None
+        if True:  # Always generate for demo
+            print("\n🤖 Generating AI trench report...")
+            trench_input = TrenchInput(
+                token={
+                    'name': token_model.token_name,
+                    'symbol': token_model.token_symbol,
+                    'address': token_model.token_address
+                },
+                prefilter={
+                    'passed': True,
+                    'token_age_minutes': token_model.token_age_minutes,
+                    'liquidity_usd': getattr(token_model, 'liquidity_usd', 0),
+                    'volume_24h_usd': getattr(token_model, 'volume_24h_usd', 0),
+                    'holders_count': token_model.holders_count
+                },
+                scores={
+                    'total': total_score,
+                    'momentum': score_result.momentum,
+                    'smart_money': score_result.smart_money,
+                    'sentiment': score_result.sentiment,
+                    'event': score_result.event
+                },
+                signals=[],  # Could be populated based on score thresholds
+                metrics={
+                    'momentum': metrics.momentum.model_dump(),
+                    'smart_money': metrics.smart_money.model_dump(),
+                    'sentiment': metrics.sentiment.model_dump(),
+                    'event': metrics.event.model_dump()
+                },
+                timeframe='multi',
+                as_of_utc=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+            )
+            trench_report_text = generate_trench_report(trench_input, chat_client)
+            # Convert to dict format for response
+            trench_report = {
+                "markdown": trench_report_text,
+                "sections": [
+                    {
+                        "title": "Analysis",
+                        "content": trench_report_text
+                    }
+                ]
+            }
+        
+        return ScoreResponse(
+            passed_prefilter=True,
+            failed_checks=[],
+            breakdown=breakdown,
+            total=total_score,
+            momentum=score_result.momentum,
+            smart_money=score_result.smart_money,
+            sentiment=score_result.sentiment,
+            event=score_result.event,
+            trench_report_markdown=trench_report_text if trench_report else None,
+            trench_report_json=trench_report
+        )
+        
+    except Exception as e:
+        print(f"❌ Scoring error: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/rank", response_model=RankResponse)
-def post_rank(req: RankRequest):
-    sol_usd = float(os.getenv("SOL_USD", "150"))
-    scored = []
-    for r in req.rows:
-        d = r.model_dump()
-        if req.tab == "New":
-            s = score_new(d, sol_usd)
-        elif req.tab == "Surging":
-            s = score_surging(d, sol_usd)
-        else:
-            s = score_all(d, sol_usd)
-        d["score"] = s
-        scored.append(d)
-    scored.sort(key=lambda x: x["score"], reverse=True)
-    return RankResponse(tab=req.tab, rows=scored)
-
-
-@app.post("/extract")
-async def extract_token_data(request: dict):
-    """Extract token data from multiple sources for maximum coverage."""
-    from extractors.unified_extractor import extract_token_data
-    
-    token_address = request.get("token_address")
-    if not token_address:
-        raise HTTPException(status_code=422, detail="token_address is required")
-    
+async def post_rank(request: RankRequest):
+    """Rank multiple tokens"""
     try:
-        result = extract_token_data(token_address)
-        return result
+        print(f"\n🏆 Ranking {len(request.rows)} tokens in category: {request.tab}")
+        
+        # Convert RankRow objects to dicts for processing
+        tokens = [row.model_dump() for row in request.rows]
+        
+        # Filter and score tokens
+        scored_tokens = []
+        for token in tokens:
+            # Add required fields for pre-filter
+            token_data = {
+                'token_address': token.get('id'),
+                'token_symbol': token.get('symbol'),
+                'token_name': token.get('name'),
+                'token_age_minutes': token.get('token_age_minutes', 30),
+                'liquidity_locked_percent': token.get('liquidity_locked_percent', 100),
+                'volume_5m_usd': token.get('volume_5m_usd', 10000),
+                'holders_count': token.get('holders_now', 150),
+                'lp_count': token.get('lp_count', 2),
+                'lp_mcap_ratio': token.get('lp_now', 100000) / token.get('mc_now', 1) if token.get('mc_now', 1) > 0 else 0.05,
+                'top_10_holders_percent': token.get('top_10_holders_percent', 20),
+                'bundle_percent': token.get('bundle_percent', 30)
+            }
+            
+            # Convert to TokenData model
+            # Ensure degen_audit is properly formatted
+            if 'degen_audit' not in token_data or token_data['degen_audit'] is None:
+                token_data['degen_audit'] = DegenAudit(
+                    is_honeypot=False,
+                    has_blacklist=False,
+                    buy_tax_percent=0.0,
+                    sell_tax_percent=0.0
+                )
+            elif isinstance(token_data['degen_audit'], dict):
+                token_data['degen_audit'] = DegenAudit(**token_data['degen_audit'])
+            
+            token_model = TokenData(**token_data)
+            pre_filter_result = run_pre_filter(token_model)
+            if pre_filter_result.passed:
+                # Create default metrics for ranking
+                metrics = ScoreMetrics()
+                score_result = scoring_engine.score(metrics, "1h")
+                scored_tokens.append({
+                    'token': token_data,
+                    'score': score_result.total
+                })
+        
+        # Apply ranking formula based on tab
+        sol_usd = 225.0  # Current SOL price, could be fetched dynamically
+        
+        ranked_rows = []
+        for scored_data in scored_tokens:
+            # Get the original row data from request
+            original_row = next((r for r in tokens if r.get('id') == scored_data['token']['token_address']), {})
+            
+            # Merge with defaults for ranking formulas
+            row = {
+                **original_row,
+                'mc_change_pct': original_row.get('mc_change_pct', 0),
+                'vol_now': original_row.get('vol_now', 0),
+                'vol_to_mc': original_row.get('vol_to_mc', 0),
+                'kolusd_now': original_row.get('kolusd_now', 0),
+                'whale_buy_count': original_row.get('whale_buy_count', 0),
+                'netflow_now': original_row.get('netflow_now', 0),
+                'kol_velocity': original_row.get('kol_velocity', 0),
+                'fee_sol_now': original_row.get('fee_sol_now', 0),
+                'mc_now': original_row.get('mc_now', 1),
+                'top10_pct': original_row.get('top_10_holders_percent', 20) / 100,  # Convert to decimal
+                'bundle_pct': original_row.get('bundle_percent', 30) / 100,  # Convert to decimal
+                'minutes_since_peak': 30,  # Default
+                'dca_flag': 0,
+                'ath_flag': 0,
+                'score': scored_data['score']
+            }
+            
+            # Calculate ranking score based on tab
+            if request.tab == "New":
+                rank_score = score_new(row, sol_usd)
+            elif request.tab == "Surging":
+                rank_score = score_surging(row, sol_usd)
+            else:  # All
+                rank_score = score_all(row, sol_usd)
+            
+            # Add score to row
+            row['rank_score'] = rank_score
+            ranked_rows.append(row)
+        
+        # Sort by rank score descending
+        ranked_rows.sort(key=lambda x: x['rank_score'], reverse=True)
+        
+        return RankResponse(tab=request.tab, rows=ranked_rows)
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        print(f"❌ Ranking error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/report", response_model=ReportResponse)
+async def post_report(request: ReportRequest):
+    """Generate AI-powered trench report"""
+    try:
+        token_address = request.token_data.get('token_address', 'Unknown')
+        print(f"\n📝 Generating trench report for: {token_address}")
+        
+        # Create TrenchInput
+        trench_input = TrenchInput(
+            token=request.token_data,
+            prefilter={},
+            scores={'total': request.score},
+            signals=[],
+            metrics=request.metrics,
+            timeframe='multi',
+            as_of_utc=datetime.utcnow().isoformat()
+        )
+        
+        # Generate report
+        report_text = generate_trench_report(trench_input, chat_client)
+        
+        return ReportResponse(report={'text': report_text})
+        
+    except Exception as e:
+        print(f"❌ Report generation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
-
-
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
