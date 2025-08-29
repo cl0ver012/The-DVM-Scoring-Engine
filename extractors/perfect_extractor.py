@@ -329,7 +329,7 @@ class PerfectTokenExtractor:
             defaults['volume_5m_usd'] = 10000.0  # Required: >$5,000 (10k is safe)
         
         if 'token_age_minutes' not in pre_filter:
-            defaults['token_age_minutes'] = 30  # Required: <60 minutes (30 is safe)
+            defaults['token_age_minutes'] = 120  # Required: >60 minutes (120 is safe)
         
         if 'degen_audit' not in pre_filter:
             pre_filter['degen_audit'] = {

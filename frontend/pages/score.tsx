@@ -52,20 +52,15 @@ export default function ScorePage() {
         token_address: tokenAddress,
         token_symbol: combinedData.token_symbol || 'UNKNOWN',
         token_name: combinedData.token_name || 'Unknown Token',
-        token_age_minutes: combinedData.token_age_minutes ?? 30,
-        degen_audit: combinedData.degen_audit || {
-          is_honeypot: false,
-          has_blacklist: false,
-          buy_tax_percent: 0.0,
-          sell_tax_percent: 0.0
-        },
-        liquidity_locked_percent: combinedData.liquidity_locked_percent || 100.0,
-        volume_5m_usd: combinedData.volume_5m_usd || 10000.0,
-        holders_count: combinedData.holders_count || 150,
-        lp_count: combinedData.lp_count || 2,
-        lp_mcap_ratio: combinedData.lp_mcap_ratio || 0.05,
-        top_10_holders_percent: combinedData.top_10_holders_percent || 20.0,
-        bundle_percent: combinedData.bundle_percent || 30.0
+        token_age_minutes: combinedData.token_age_minutes,
+        degen_audit: combinedData.degen_audit,
+        liquidity_locked_percent: combinedData.liquidity_locked_percent,
+        volume_5m_usd: combinedData.volume_5m_usd,
+        holders_count: combinedData.holders_count,
+        lp_count: combinedData.lp_count,
+        lp_mcap_ratio: combinedData.lp_mcap_ratio,
+        top_10_holders_percent: combinedData.top_10_holders_percent,
+        bundle_percent: combinedData.bundle_percent
       }
 
       // Prepare metrics from extracted data

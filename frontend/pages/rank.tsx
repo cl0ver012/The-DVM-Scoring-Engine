@@ -225,34 +225,48 @@ export default function RankPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {rankingData.rows.map((row: any, index: number) => (
-                    <tr key={row.id} className={index === 0 ? 'bg-blue-50' : ''}>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                        #{index + 1}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{row.symbol}</div>
-                          <div className="text-xs text-gray-500">{row.id.slice(0, 8)}...</div>
+                  {rankingData.rows.length > 0 ? (
+                    rankingData.rows.map((row: any, index: number) => (
+                      <tr key={row.id} className={index === 0 ? 'bg-blue-50' : ''}>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                          #{index + 1}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{row.symbol}</div>
+                            <div className="text-xs text-gray-500">{row.id.slice(0, 8)}...</div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">
+                          {row.score?.toFixed(1) || '0.0'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-600">
+                          -
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-green-600">
+                          -
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-purple-600">
+                          -
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-orange-600">
+                          -
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center">
+                        <div className="text-gray-500">
+                          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <p className="mt-2 text-sm">No tokens passed the filters</p>
+                          <p className="text-xs mt-1">Try adjusting your category or adding different tokens</p>
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        {row.score?.toFixed(1) || '0.0'}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-600">
-                        -
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-green-600">
-                        -
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-purple-600">
-                        -
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-orange-600">
-                        -
-                      </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -267,13 +281,17 @@ export default function RankPage() {
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-gray-900">
-                  {(rankingData.rows.reduce((sum: number, row: any) => sum + (row.score || 0), 0) / rankingData.rows.length).toFixed(1)}
+                  {rankingData.rows.length > 0 
+                    ? (rankingData.rows.reduce((sum: number, row: any) => sum + (row.score || 0), 0) / rankingData.rows.length).toFixed(1)
+                    : '0.0'}
                 </div>
                 <div className="text-sm text-gray-600">Average Score</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-gray-900">
-                  {Math.max(...rankingData.rows.map((row: any) => row.score || 0)).toFixed(1)}
+                  {rankingData.rows.length > 0
+                    ? Math.max(...rankingData.rows.map((row: any) => row.score || 0)).toFixed(1)
+                    : '0.0'}
                 </div>
                 <div className="text-sm text-gray-600">Highest Score</div>
               </div>

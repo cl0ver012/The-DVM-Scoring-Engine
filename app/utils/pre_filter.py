@@ -6,7 +6,7 @@ from app.models import PreFilterResult, TokenData
 
 
 # Pre-filter thresholds per document requirements
-MAX_TOKEN_AGE_MINUTES = 60  # 1. Token Age (<1h)
+MIN_TOKEN_AGE_MINUTES = 60  # 1. Token Age (>1h for safety - avoid rugs)
 MAX_TAX_PERCENT = 3.0  # 2. Basic Security Audit (<3%)
 REQUIRED_LP_LOCKED_PERCENT = 100.0  # 3. Liquidity Lock (100%)
 MIN_VOLUME_5M_USD = 5_000.0  # 4. Initial Volume (>$5k)
@@ -18,9 +18,9 @@ MAX_BUNDLE_PERCENT = 40.0  # 9. Bundle Percentage (<40%)
 
 
 def check_token_age(token: TokenData) -> Tuple[bool, Dict[str, float]]:
-    return token.token_age_minutes < MAX_TOKEN_AGE_MINUTES, {
+    return token.token_age_minutes > MIN_TOKEN_AGE_MINUTES, {
         "token_age_minutes": token.token_age_minutes,
-        "max_age_minutes": MAX_TOKEN_AGE_MINUTES,
+        "min_age_minutes": MIN_TOKEN_AGE_MINUTES,
     }
 
 
@@ -143,7 +143,7 @@ def run_pre_filter(token: TokenData) -> PreFilterResult:
     print("="*60)
     
     checks = {
-        "age_lt_1h": check_token_age,
+        "age_gt_1h": check_token_age,
         "degen_audit_pass": check_degen_audit,
         "liquidity_locked_100": check_liquidity_locked,
         "volume_5m_usd_gte_5000": check_volume_5m,

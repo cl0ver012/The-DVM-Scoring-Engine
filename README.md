@@ -149,7 +149,7 @@ The-DVM-Scoring-Engine/
 ## 📈 Scoring Variables
 
 ### Pre-filter Requirements
-- Token age > 1 hour
+- Token age > 1 hour (safety requirement)
 - No honeypot/blacklist
 - Buy/sell tax < 3%
 - Liquidity locked (if > $1000)

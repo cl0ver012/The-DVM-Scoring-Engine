@@ -13,7 +13,7 @@ const SCORE_EXAMPLES = [
       token_address: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
       token_symbol: 'BONK',
       token_name: 'Bonk',
-      token_age_minutes: 45, // Less than 60 minutes to pass pre-filter
+      token_age_minutes: 90, // > 60 minutes to pass pre-filter
       price_now: 0.00002,
       mc_now: 1500000000,
       volume_24h_usd: 50000000,
@@ -58,7 +58,7 @@ const SCORE_EXAMPLES = [
       token_address: 'RISKYxxx123456789',
       token_symbol: 'RISKY',
       token_name: 'Risky Token',
-      token_age_minutes: 30, // Pass age check
+      token_age_minutes: 120, // > 60 minutes to pass pre-filter
       price_now: 0.0000001,
       mc_now: 100000,
       volume_24h_usd: 50000,

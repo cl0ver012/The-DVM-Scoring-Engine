@@ -18,6 +18,7 @@ from pydantic import BaseModel
 # Define missing request/response models
 class ExtractRequest(BaseModel):
     token_address: str
+    demo_mode: bool = False  # Enable demo mode for unknown tokens
 
 class ExtractResponse(BaseModel):
     success: bool
@@ -105,8 +106,16 @@ async def post_extract(request: ExtractRequest):
     try:
         print(f"\n📊 Extracting data for token: {request.token_address}")
         
+        # Set demo mode if requested
+        if request.demo_mode:
+            os.environ['DVM_DEMO_MODE'] = 'true'
+        
         # Extract data using unified extractor
         result = extract_token_data(request.token_address)
+        
+        # Reset demo mode
+        if request.demo_mode:
+            os.environ['DVM_DEMO_MODE'] = 'false'
         
         # Print extracted scoring variables
         if result and 'combined_data' in result:
@@ -337,26 +346,38 @@ async def post_rank(request: RankRequest):
     try:
         print(f"\n🏆 Ranking {len(request.rows)} tokens in category: {request.tab}")
         
+        # Import category filters
+        from app.ranker.category_filters import get_category_filter
+        category_filter = get_category_filter(request.tab)
+        
+
+        
         # Convert RankRow objects to dicts for processing
         tokens = [row.model_dump() for row in request.rows]
         
         # Filter and score tokens
         scored_tokens = []
         for token in tokens:
-            # Add required fields for pre-filter
-            token_data = {
-                'token_address': token.get('id'),
-                'token_symbol': token.get('symbol'),
-                'token_name': token.get('name'),
-                'token_age_minutes': token.get('token_age_minutes', 30),
-                'liquidity_locked_percent': token.get('liquidity_locked_percent', 100),
-                'volume_5m_usd': token.get('volume_5m_usd', 10000),
-                'holders_count': token.get('holders_now', 150),
-                'lp_count': token.get('lp_count', 2),
-                'lp_mcap_ratio': token.get('lp_now', 100000) / token.get('mc_now', 1) if token.get('mc_now', 1) > 0 else 0.05,
-                'top_10_holders_percent': token.get('top_10_holders_percent', 20),
-                'bundle_percent': token.get('bundle_percent', 30)
-            }
+            token_address = token.get('id')
+            print(f"Processing token: {token_address}")
+            
+            # Extract real data for the token
+            extracted_data = None
+            try:
+                extracted_data = extract_token_data(token_address)
+                if extracted_data and extracted_data.get('combined_data'):
+                    # Use extracted combined data
+                    token_data = extracted_data['combined_data']
+                    token_data['token_address'] = token_address
+                    print(f"✅ Using extracted data for {token_address}")
+                    print(f"   Coverage: {extracted_data.get('coverage', {}).get('percentage', 0)}%")
+                else:
+                    # No combined data, skip this token
+                    print(f"❌ No data available for {token_address}")
+                    continue
+            except Exception as e:
+                print(f"❌ Failed to extract data for {token_address}: {e}")
+                continue
             
             # Convert to TokenData model
             # Ensure degen_audit is properly formatted
@@ -372,13 +393,62 @@ async def post_rank(request: RankRequest):
             
             token_model = TokenData(**token_data)
             pre_filter_result = run_pre_filter(token_model)
-            if pre_filter_result.passed:
-                # Create default metrics for ranking
-                metrics = ScoreMetrics()
+            
+            # Check both pre-filter and category-specific requirements
+            if not pre_filter_result.passed:
+                print(f"❌ Token {token_address} failed pre-filter: {pre_filter_result.failed_checks}")
+            elif not category_filter(token_data):
+                print(f"❌ Token {token_address} failed category filter for {request.tab}")
+            else:
+                print(f"✅ Token {token_address} passed filters for {request.tab} category")
+                # Create metrics from extracted data if available
+                scoring_data = extracted_data.get('combined_data', {})
+                if scoring_data:
+                    metrics = ScoreMetrics(
+                        momentum=MomentumMetrics(
+                            vol_over_avg_ratio=scoring_data.get('vol_over_avg_ratio', 1.0),
+                            price_change_percent=scoring_data.get('price_change_percent', 0.0),
+                            ath_hit=scoring_data.get('ath_hit', False),
+                            holders_growth_percent=scoring_data.get('holders_growth_percent', 0.0)
+                        ),
+                        smart_money=SmartMoneyMetrics(
+                            whale_buy_usd=scoring_data.get('whale_buy_usd', 0.0),
+                            whale_buy_supply_percent=scoring_data.get('whale_buy_supply_percent', 0.0),
+                            dca_accumulation_supply_percent=scoring_data.get('dca_accumulation_supply_percent', 0.0),
+                            net_inflow_wallets_gt_10k_usd=scoring_data.get('net_inflow_wallets_gt_10k_usd', 0.0)
+                        ),
+                        sentiment=SentimentMetrics(
+                            mentions_velocity_ratio=scoring_data.get('mentions_velocity_ratio', 1.0),
+                            tier1_kol_buy_supply_percent=scoring_data.get('tier1_kol_buy_supply_percent', 0.0),
+                            influencer_reach=scoring_data.get('influencer_reach', 0),
+                            polarity_positive_percent=scoring_data.get('polarity_positive_percent', 50.0)
+                        ),
+                        event=EventMetrics(
+                            inflow_over_mcap_percent=scoring_data.get('inflow_over_mcap_percent', 0.0),
+                            upgrade_or_staking_live=scoring_data.get('upgrade_or_staking_live', False)
+                        )
+                    )
+                else:
+                    # Create default metrics for ranking
+                    metrics = ScoreMetrics()
+                
                 score_result = scoring_engine.score(metrics, "1h")
+                
+                # Merge extracted data with original row
+                original_row = next((r for r in tokens if r.get('id') == token_address), {})
+                # Update original row with extracted data
+                original_row['mc_now'] = token_data.get('mc_now', original_row.get('mc_now', 1000000))
+                original_row['vol_now'] = token_data.get('volume_24h_usd', original_row.get('vol_now', 100000))
+                original_row['lp_now'] = token_data.get('liquidity_usd', original_row.get('lp_now', 50000))
+                original_row['holders_now'] = token_data.get('holders_count', original_row.get('holders_now', 1000))
+                original_row['price_now'] = token_data.get('price_now', original_row.get('price_now', 1.0))
+                original_row['symbol'] = token_data.get('token_symbol', original_row.get('symbol', 'TOKEN'))
+                original_row['name'] = token_data.get('token_name', original_row.get('name', 'Unknown'))
+                
                 scored_tokens.append({
                     'token': token_data,
-                    'score': score_result.total
+                    'score': score_result.total,
+                    'original_row': original_row if 'original_row' in locals() else token
                 })
         
         # Apply ranking formula based on tab
@@ -386,8 +456,9 @@ async def post_rank(request: RankRequest):
         
         ranked_rows = []
         for scored_data in scored_tokens:
-            # Get the original row data from request
-            original_row = next((r for r in tokens if r.get('id') == scored_data['token']['token_address']), {})
+            # Get the original row data from scored_data or request
+            original_row = scored_data.get('original_row', 
+                next((r for r in tokens if r.get('id') == scored_data['token']['token_address']), {}))
             
             # Merge with defaults for ranking formulas
             row = {
@@ -401,8 +472,8 @@ async def post_rank(request: RankRequest):
                 'kol_velocity': original_row.get('kol_velocity', 0),
                 'fee_sol_now': original_row.get('fee_sol_now', 0),
                 'mc_now': original_row.get('mc_now', 1),
-                'top10_pct': original_row.get('top_10_holders_percent', 20) / 100,  # Convert to decimal
-                'bundle_pct': original_row.get('bundle_percent', 30) / 100,  # Convert to decimal
+                'top10_pct': token_data.get('top_10_holders_percent', 20) / 100,  # Convert to decimal
+                'bundle_pct': token_data.get('bundle_percent', 30) / 100,  # Convert to decimal
                 'minutes_since_peak': 30,  # Default
                 'dca_flag': 0,
                 'ath_flag': 0,
@@ -423,6 +494,12 @@ async def post_rank(request: RankRequest):
         
         # Sort by rank score descending
         ranked_rows.sort(key=lambda x: x['rank_score'], reverse=True)
+        
+        # Log summary
+        print(f"\n📊 Ranking Summary:")
+        print(f"  - Total tokens submitted: {len(request.rows)}")
+        print(f"  - Tokens that passed filters: {len(scored_tokens)}")
+        print(f"  - Tokens ranked: {len(ranked_rows)}")
         
         return RankResponse(tab=request.tab, rows=ranked_rows)
         

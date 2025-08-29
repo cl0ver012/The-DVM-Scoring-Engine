@@ -3,7 +3,7 @@
     "token_address": "So11111111111111111111111111111111111111112",
     "token_symbol": "DVM",
     "token_name": "DVM Example Token",
-    "token_age_minutes": 35,
+    "token_age_minutes": 90,
     "degen_audit": {
       "is_honeypot": false,
       "has_blacklist": false,
@@ -22,7 +22,7 @@
     "token_address": "Bad1111111111111111111111111111111111111111",
     "token_symbol": "BAD",
     "token_name": "Bad Example Token",
-    "token_age_minutes": 70,
+    "token_age_minutes": 30,
     "degen_audit": {
       "is_honeypot": false,
       "has_blacklist": false,

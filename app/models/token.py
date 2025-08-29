@@ -20,7 +20,7 @@ class TokenData(BaseModel):
     # Pre-filter variables per document requirements
     token_age_minutes: int = Field(ge=0, description="Age since launch in minutes")
 
-    # 1. Token Age (<1h is required by pre-filter to focus on new launches)
+    # 1. Token Age (>1h is required by pre-filter for safety)
     # Covered by token_age_minutes
 
     # 2. Basic Security Audit (GoPlus API)

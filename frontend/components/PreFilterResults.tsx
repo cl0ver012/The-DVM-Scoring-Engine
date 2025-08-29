@@ -7,7 +7,7 @@ interface PreFilterResultsProps {
 
 export default function PreFilterResults({ passed, failedChecks }: PreFilterResultsProps) {
   const failureReasons = {
-    'age_lt_1h': 'Token is older than 1 hour',
+    'age_gt_1h': 'Token is younger than 1 hour',
     'degen_audit_pass': 'Failed security audit (honeypot/blacklist/high tax)',
     'liquidity_locked_100': 'Liquidity is not 100% locked',
     'volume_5m_usd_gte_5000': 'Volume (5m) is less than $5,000',
@@ -41,7 +41,7 @@ export default function PreFilterResults({ passed, failedChecks }: PreFilterResu
       {!passed && failedChecks.length > 0 && (
         <div>
           <p className="text-sm text-gray-700 mb-3">This token does not meet the following requirements:</p>
-          <p className="text-xs text-gray-600 mb-3">The DVM Scoring Engine focuses on newly launched tokens (less than 1 hour old)</p>
+          <p className="text-xs text-gray-600 mb-3">The DVM Scoring Engine requires tokens to be at least 1 hour old for safety</p>
           
           <div className="space-y-2">
             {failedChecks.map((check) => (

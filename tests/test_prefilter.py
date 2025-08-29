@@ -8,7 +8,7 @@ def make_passing_token() -> TokenData:
             "token_address": "So11111111111111111111111111111111111111112",
             "token_symbol": "DVM",
             "token_name": "DVM Example Token",
-            "token_age_minutes": 35,
+            "token_age_minutes": 90,
             "degen_audit": {
                 "is_honeypot": False,
                 "has_blacklist": False,
@@ -32,7 +32,7 @@ def make_failing_token() -> TokenData:
             "token_address": "Bad1111111111111111111111111111111111111111",
             "token_symbol": "BAD",
             "token_name": "Bad Example Token",
-            "token_age_minutes": 70,
+            "token_age_minutes": 30,
             "degen_audit": {
                 "is_honeypot": False,
                 "has_blacklist": False,
@@ -62,7 +62,7 @@ def test_prefilter_fails_for_invalid_token():
     result = run_pre_filter(token)
     assert result.passed is False
     # Should fail due to age, lp_count, and lp_mcap_ratio
-    assert "age_lt_1h" in result.failed_checks
+    assert "age_gt_1h" in result.failed_checks
     assert "lp_count_gt_1" in result.failed_checks
     assert "lp_mcap_ratio_gt_002" in result.failed_checks
 
@@ -72,7 +72,7 @@ def base_token(overrides: dict) -> TokenData:
         "token_address": "Base111111111111111111111111111111111111111",
         "token_symbol": "BASE",
         "token_name": "Base",
-        "token_age_minutes": 30,  # pass age
+        "token_age_minutes": 90,  # pass age
         "degen_audit": {
             "is_honeypot": False,
             "has_blacklist": False,
@@ -92,10 +92,10 @@ def base_token(overrides: dict) -> TokenData:
 
 
 def test_fail_age_check():
-    token = base_token({"token_age_minutes": 61})
+    token = base_token({"token_age_minutes": 30})
     result = run_pre_filter(token)
     assert result.passed is False
-    assert "age_lt_1h" in result.failed_checks
+    assert "age_gt_1h" in result.failed_checks
 
 
 def test_fail_degen_audit_honeypot():
